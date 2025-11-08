@@ -319,10 +319,12 @@ def plot_activation_histogram(activation_counts):
       activation_counts : jnp.ndarray of shape (latent_dim,)
     """
     plt.figure(figsize=(8, 4))
-    plt.bar(range(len(activation_counts)), activation_counts)
+    neuron_indices = range(len(activation_counts))
+    plt.bar(neuron_indices, activation_counts)
     plt.xlabel("Hidden Neuron Index")
     plt.ylabel("Activation Count")
     plt.title("Latent Space Activation Distribution")
+    plt.xticks(neuron_indices)  # ✅ Force integer ticks only
     plt.grid(True)
     plt.show()
 
