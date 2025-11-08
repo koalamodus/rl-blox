@@ -8,6 +8,9 @@ class SAE(nnx.Module):
     input_dim: int
 
     def __init__(self, latent_dim: int, input_dim: int, rngs: nnx.Rngs):
+        self.latent_dim = latent_dim
+        self.input_dim = input_dim
+
         self.encoder = nnx.Linear(input_dim, latent_dim, rngs=rngs)
         self.decoder = nnx.Linear(latent_dim, input_dim, rngs=rngs)
 
@@ -91,7 +94,7 @@ def train_step(model, opt, x_batch):
         sparsity_loss = sparsity_coeff * jnp.mean(jnp.abs(z))
         return recon_loss + sparsity_loss
     loss, grads = nnx.value_and_grad(loss_fn)(model)
-    opt.update(model, grads)
+    opt.update(grads)
     return loss
 
 def create_dummy_database(num_samples: int,
@@ -174,11 +177,12 @@ for start in range(0, val_data.shape[0], batch_size):
 val_loss /= val_batches
 print(f"Validation loss: {val_loss:.4f}")
 
+# Visualize trained weights and biases of trained SAE
+
 import matplotlib.pyplot as plt
 
-
 state = nnx.state(model)
-print(state)
+# print(state)
 
 encoder_w = state['encoder']['kernel'].value
 encoder_b = state['encoder']['bias'].value
@@ -267,6 +271,63 @@ def visualize_decoder(decoder_w, decoder_b):
 
 visualize_encoder(encoder_w, encoder_b)
 visualize_decoder(decoder_w, decoder_b)
+
+# Visualize SAE latent layer activation distribution of validation dataset
+
+def show_hidden_activation(model: SAE, example_input: jnp.ndarray):
+    """
+    Displays the hidden layer activation (latent vector z) for a given input.
+
+    Args:
+      model         : Trained SAE model
+      example_input : jnp.ndarray of shape (1, input_dim)
+    """
+    _, hidden_activation = model(example_input)
+    print("Hidden layer activation (z) for example input:")
+    print(hidden_activation)
+
+
+example_input = val_data[0:1]
+show_hidden_activation(model, example_input)
+
+def compute_activation_histogram(model, val_data):
+    """
+    Computes how often each hidden neuron is activated (non-zero) across the validation dataset.
+
+    Args:
+      model    : Trained SAE model
+      val_data : jnp.ndarray of shape (num_samples, input_dim)
+
+    Returns:
+      activation_counts : jnp.ndarray of shape (latent_dim,) with activation frequencies
+    """
+    activation_counts = jnp.zeros(model.latent_dim, dtype=jnp.int32) 
+
+    for i in range(val_data.shape[0]):
+        x = val_data[i:i+1]
+        _, z = model(x)
+        active = z[0] > 0
+        activation_counts += active.astype(jnp.int32)
+
+    return activation_counts
+
+def plot_activation_histogram(activation_counts):
+    """
+    Plots a histogram of hidden neuron activation frequencies.
+
+    Args:
+      activation_counts : jnp.ndarray of shape (latent_dim,)
+    """
+    plt.figure(figsize=(8, 4))
+    plt.bar(range(len(activation_counts)), activation_counts)
+    plt.xlabel("Hidden Neuron Index")
+    plt.ylabel("Activation Count")
+    plt.title("Latent Space Activation Distribution")
+    plt.grid(True)
+    plt.show()
+
+activation_counts = compute_activation_histogram(model, val_data)
+plot_activation_histogram(activation_counts)
 
 
 # # Replace layer in MLP with SAE
