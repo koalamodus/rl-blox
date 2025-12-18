@@ -3,7 +3,7 @@ from minigrid.core.grid import Grid
 from minigrid.core.mission import MissionSpace
 from minigrid.core.world_object import Ball
 from minigrid.minigrid_env import MiniGridEnv
-from minigrid.wrappers import FlatObsWrapper, ImgObsWrapper
+from minigrid.wrappers import FlatObsWrapper
 
 
 TASK_COLORS = ["red", "green", "yellow", "purple", "blue", "grey"]
@@ -86,11 +86,9 @@ class FindObjectEnv(MiniGridEnv):
 
 def make_ocean_env(color: str = "None", render_mode = None):    
     env = FlatObsWrapper(
-        ImgObsWrapper(
-            FindObjectEnv(
-                color,
-                render_mode=render_mode,
-            )
+        FindObjectEnv(
+            color,
+            render_mode=render_mode,
         )
     )
     return env

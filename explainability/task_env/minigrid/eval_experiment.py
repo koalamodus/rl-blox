@@ -32,7 +32,7 @@ for seed in [0, 4, 9]:
     print(f"seed is {seed}")
     
     base = os.path.expanduser(
-        f"~/workspace/XRL/ocean_trained_model/seed_{seed}/"
+        f"~/workspace/XRL/ocean_trained_model/oceans_large/uts/seed_{seed}/"
     )
     eval_all_checkpoints(
         base,
