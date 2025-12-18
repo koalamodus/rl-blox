@@ -1,15 +1,19 @@
-from minigrid.core.constants import COLOR_NAMES
+import operator
+import numpy as np
+from functools import reduce
+from gymnasium import spaces
+from gymnasium.core import ObservationWrapper
+
+from minigrid.core.constants import COLOR_NAMES, COLOR_TO_IDX
 from minigrid.core.grid import Grid
 from minigrid.core.mission import MissionSpace
 from minigrid.core.world_object import Ball
 from minigrid.minigrid_env import MiniGridEnv
-from minigrid.wrappers import FlatObsWrapper
 
+# Used to map colors to integers
+# COLOR_TO_IDX = {"red": 0, "green": 1, "blue": 2, "purple": 3, "yellow": 4, "grey": 5}
+# context = COLOR_TO_IDX[color]
 
-TASK_COLORS = ["red", "green", "yellow", "purple", "blue", "grey"]
-
-# training env colors: "red", "green", "yellow", "purple"
-# test env colors: "blue", "grey"
 
 class FindObjectEnv(MiniGridEnv):
     def __init__(
@@ -28,7 +32,7 @@ class FindObjectEnv(MiniGridEnv):
 
         super().__init__(
             mission_space=mission_space,
-            width=21,
+            width=10,
             height=18,
             max_steps=200,
             **kwargs,
@@ -72,10 +76,6 @@ class FindObjectEnv(MiniGridEnv):
         ax, ay = self.agent_pos
         tx, ty = self.target_pos
 
-        # Toggle/pickup action terminates the episode
-        if action == self.actions.toggle:
-            terminated = True
-
         # Reward for performing the done action next to target object
         if action == self.actions.done:
             if (ax == tx and abs(ay - ty) == 1) or (ay == ty and abs(ax - tx) == 1):
@@ -84,8 +84,61 @@ class FindObjectEnv(MiniGridEnv):
 
         return obs, reward, terminated, truncated, info
 
+class FlatContextObsWrapper(ObservationWrapper):
+    """
+    Encode mission strings using a one-hot scheme,
+    and combine these with observed images into one flat array.
+
+    This wrapper is not applicable to BabyAI environments, given that these have their own language component
+
+    Example:
+        >>> import gymnasium as gym
+        >>> import matplotlib.pyplot as plt
+        >>> from minigrid.wrappers import FlatObsWrapper
+        >>> env = gym.make("MiniGrid-LavaCrossingS11N5-v0")
+        >>> env_obs = FlatObsWrapper(env)
+        >>> obs, _ = env_obs.reset()
+        >>> obs.shape
+        (2835,)
+    """
+
+    def __init__(self, env):
+        super().__init__(env)
+
+        imgSpace = env.observation_space.spaces["image"]
+        imgSize = reduce(operator.mul, imgSpace.shape, 1)
+
+        self.observation_space = spaces.Box(
+            low=0,
+            high=255,
+            shape=(imgSize + 1,),
+            dtype="uint8",
+        )
+    
+    def observation(self, obs):
+        image = obs["image"]
+
+        if "red" in obs["mission"]:
+            context = COLOR_TO_IDX["red"]
+        elif "blue" in obs["mission"]:
+            context = COLOR_TO_IDX["blue"]
+        elif "green" in obs["mission"]:
+            context = COLOR_TO_IDX["green"]
+        elif "yellow" in obs["mission"]:
+            context = COLOR_TO_IDX["yellow"]
+        elif "purple" in obs["mission"]:
+            context = COLOR_TO_IDX["purple"]
+        elif "grey" in obs["mission"]:
+            context = COLOR_TO_IDX["grey"]
+        else:
+            raise RuntimeError
+        
+        obs = np.append(image.flatten(), (context))
+
+        return obs
+
 def make_ocean_env(color: str = "None", render_mode = None):    
-    env = FlatObsWrapper(
+    env = FlatContextObsWrapper(
         FindObjectEnv(
             color,
             render_mode=render_mode,

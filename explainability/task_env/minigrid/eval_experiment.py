@@ -1,12 +1,14 @@
 import os
-
-from minigrid_envs import TASK_COLORS, make_ocean_env
+from minigrid.core.constants import COLOR_NAMES
+from minigrid_envs import make_ocean_env
 from eval_helper import (
     eval_policy,
     get_all_checkpoints,
     get_policy_from_checkpoint,
 )
 
+# Used to map colors to integers
+# COLOR_TO_IDX = {"red": 0, "green": 1, "blue": 2, "purple": 3, "yellow": 4, "grey": 5}
 
 def eval_all_checkpoints(
     base,
@@ -20,19 +22,20 @@ def eval_all_checkpoints(
 
         policy = get_policy_from_checkpoint(path, env)
         
-        for color in TASK_COLORS:
+        for color in COLOR_NAMES:
             eval_env = make_ocean_env(color = color, render_mode = "human")
             _ = eval_policy(color, eval_env, policy, verbose=True)
 
-color = TASK_COLORS[0]
-env = make_ocean_env(color = color, render_mode = "human")
+benchmark, grid_size = "oceans", "small"
+seeds = [0, 1, 2, 3, 4]
 
+env = make_ocean_env(color = "red", render_mode = "human")
 
-for seed in [0, 4, 9]:
-    print(f"seed is {seed}")
+for seed in seeds:
+    print(f"seed: {seed}")
     
     base = os.path.expanduser(
-        f"~/workspace/XRL/ocean_trained_model/oceans_large/uts/seed_{seed}/"
+        f"~/workspace/XRL/ocean_trained_model/{benchmark}_{grid_size}/uts/seed_{seed}/"
     )
     eval_all_checkpoints(
         base,
