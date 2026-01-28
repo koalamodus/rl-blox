@@ -6,24 +6,36 @@ import orbax.checkpoint as ocp
 from rl_blox.blox.function_approximator.mlp import MLP
 
 
-def eval_policy(color, env, policy, verbose=False):
-    task_scores = {}
-    ep_reward = 0.0
-    obs, _ = env.reset()
-    terminated = truncated = False
+def eval_policy(color, env, policy, verbose=False, num_episode=1):
+    task_score_info = {}
+    sum_ep_reward = 0.0
+    num_task_success = 0.0
+    for _ in range(num_episode):
+        ep_reward = 0.0
+        obs, _ = env.reset()
+        terminated = truncated = False
 
-    while not (terminated or truncated):
-        action = policy(obs)
-        # print(f"action: {action}")
-        obs, reward, terminated, truncated, _ = env.step(action)
-        ep_reward += reward
+        while not (terminated or truncated):
+            action = policy(obs)
+            # print(f"action: {action}")
+            obs, reward, terminated, truncated, _ = env.step(action)
+            ep_reward += reward
+            if reward > 0.0:
+                num_task_success += 1
+            sum_ep_reward += ep_reward
 
-    task_scores.update({f"Task {color}": [ep_reward]})
+    task_score_info.update({
+        f"Task {color}": {
+            "Return": sum_ep_reward / num_episode,
+            "Success Rate": num_task_success / num_episode
+        }
+    })
+    # task_score_info.update({f"Task {color}": ep_reward})
 
     if verbose:
-        print(task_scores)
+        print(task_score_info)
 
-    return task_scores
+    return task_score_info
 
 
 def get_policy_from_checkpoint(path, env):
@@ -55,4 +67,4 @@ def get_all_checkpoints(path):
         if os.path.isdir(full):
             chkpt_paths.append(full)
 
-    return sorted(chkpt_paths)
+    return sorted(chkpt_paths, reverse=True)

@@ -32,9 +32,9 @@ class FindObjectEnv(MiniGridEnv):
 
         super().__init__(
             mission_space=mission_space,
-            width=10,
-            height=18,
-            max_steps=200,
+            width=13,
+            height=13,
+            max_steps=500,
             **kwargs,
         )
 
@@ -58,13 +58,13 @@ class FindObjectEnv(MiniGridEnv):
         }
 
         self.put_obj(objects["red"], width - 2, 1)
-        self.put_obj(objects["blue"], width - 2, 4)
-        self.put_obj(objects["green"], width - 2, 7)
-        self.put_obj(objects["yellow"], width - 2, 10)
-        self.put_obj(objects["purple"], width - 2, 13)
-        self.put_obj(objects["grey"], width - 2, 16)
+        self.put_obj(objects["blue"], width - 2, 3)
+        self.put_obj(objects["green"], width - 2, 5)
+        self.put_obj(objects["yellow"], width - 2, 7)
+        self.put_obj(objects["purple"], width - 2, 9)
+        self.put_obj(objects["grey"], width - 2, 11)
 
-        self.agent_pos = (1, 9)
+        self.agent_pos = (1, 6)
         self.agent_dir = 0
 
         self.target_pos = objects[self.color].cur_pos
@@ -76,11 +76,13 @@ class FindObjectEnv(MiniGridEnv):
         ax, ay = self.agent_pos
         tx, ty = self.target_pos
 
-        # Reward for performing the done action next to target object
-        if action == self.actions.done:
-            if (ax == tx and abs(ay - ty) == 1) or (ay == ty and abs(ax - tx) == 1):
-                reward = self._reward()
+        # Reward for reaching the target object
+        if (ax == tx and abs(ay - ty) == 1) or (ay == ty and abs(ax - tx) == 1):
+            reward = self._reward()
             terminated = True
+        # Reward for performing the done action next to target object and terminate episode
+        # if action == self.actions.done:
+        #     terminated = True
 
         return obs, reward, terminated, truncated, info
 
@@ -111,7 +113,7 @@ class FlatContextObsWrapper(ObservationWrapper):
         self.observation_space = spaces.Box(
             low=0,
             high=255,
-            shape=(imgSize + 1,),
+            shape=(imgSize + 6,),
             dtype="uint8",
         )
     
@@ -132,8 +134,12 @@ class FlatContextObsWrapper(ObservationWrapper):
             context = COLOR_TO_IDX["grey"]
         else:
             raise RuntimeError
-        
-        obs = np.append(image.flatten(), (context))
+
+        one_hot_context = np.zeros(6)
+        one_hot_context[context] = 1
+
+        obs = np.append(image.flatten(), one_hot_context)
+
 
         return obs
 

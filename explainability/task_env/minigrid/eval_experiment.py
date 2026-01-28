@@ -24,7 +24,7 @@ def eval_all_checkpoints(
         
         for color in COLOR_NAMES:
             eval_env = make_ocean_env(color = color, render_mode = "human")
-            _ = eval_policy(color, eval_env, policy, verbose=True)
+            _ = eval_policy(color, eval_env, policy, verbose=True, num_episode=1)
 
 benchmark, grid_size = "oceans", "small"
 seeds = [0, 1, 2, 3, 4]
