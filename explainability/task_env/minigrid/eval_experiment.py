@@ -21,13 +21,14 @@ def eval_all_checkpoints(
 
 
         policy = get_policy_from_checkpoint(path, env)
-        
+        # COLOR_NAMES = ["blue"]
         for color in COLOR_NAMES:
             eval_env = make_ocean_env(color = color, render_mode = "human")
             _ = eval_policy(color, eval_env, policy, verbose=True, num_episode=1)
 
-benchmark, grid_size = "oceans", "small"
-seeds = [0, 1, 2, 3, 4]
+benchmark, grid_size = "oceans", "medium"
+seeds = [3, 6, 8, 9]  # successful seeds
+# seeds = range(10)
 
 env = make_ocean_env(color = "red", render_mode = "human")
 
