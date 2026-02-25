@@ -79,10 +79,12 @@ def evaluate_policy_on_task(policy, task="all"):
     if task == "all":
         task = COLOR_NAMES
     else:
-        assert color in COLOR_NAMES
-        print(f"task:{task}")
+        task = task if isinstance(task, list) else [task]
     
     for color in task:
+        print(f"color:{color}")
+        assert color in COLOR_NAMES
+
         eval_env = make_ocean_env(color = color, render_mode = "human")
         _ = eval_policy(color, eval_env, policy, verbose=True, num_episode=1)
 
@@ -116,18 +118,18 @@ def init_mask_logits(shapes, init_value=0.9):
 
 def hard_concrete_sample(logits, tau, key, hard_threshold = 0.5):
     u1, u2 = jax.random.uniform(key, (2,))
-    print(f"u1, u2={u1, u2}")
+    # print(f"u1, u2={u1, u2}")
     noise = -jnp.log(jnp.log(u1)/jnp.log(u2))
     # noise = -jnp.log(jnp.log(u1)) - jnp.log(jnp.log(u2))
     s = jax.nn.sigmoid((logits - noise) / tau)
-    print(f"noise={noise}, logits={logits}")
+    # print(f"noise={noise}, logits={logits}")
     
     hard = (s > hard_threshold).astype(s.dtype)
     
     # Straight-through estimator:
     # forward = hard, backward = gradient of s
     b = s + jax.lax.stop_gradient(hard - s)
-    print(f"b={b}, s={s}")
+    # print(f"b={b}, s={s}")
 
     return b
 
@@ -182,6 +184,8 @@ import warnings
 from tqdm import tqdm
 from rl_blox.blox.replay_buffer import ReplayBuffer
 
+subtask = "green" # "red", "green", "blue", "purple", "yellow", "grey"
+
 def collect_task_data(rb, num_steps, q, task):
     env = make_ocean_env(color = task, render_mode = "None")
     obs, _ = env.reset()
@@ -228,22 +232,26 @@ num_steps = hparams_algorithm.pop("total_timesteps")
 # Load existing replay buffer
 import pickle
 
-with open("rb_ckpt.pkl", "rb") as f:
-    rb = pickle.load(f)
-    print("Number of transitions:", len(rb))
+rb_file = f"rb_{subtask}.pkl"
+
+load_rb = False
+if load_rb:
+    with open(rb_file, "rb") as f:
+        rb = pickle.load(f)
+        print("Number of transitions:", len(rb))
 
 if len(rb) < rb.buffer_size :
     # Collect experience with trained policy
-    collect_task_data(rb, num_steps, q, task="red")
+    collect_task_data(rb, num_steps, q, task=subtask)
 
 
 # # Save experience in replay buffer
-save_rb = False
+save_rb = True
 if save_rb:
     import pickle
-    with open("rb_ckpt.pkl", "wb") as f:
+    with open(rb_file, "wb") as f:
         pickle.dump(rb, f)
-    print("Saved replay buffer checkpoint.")
+    print(f"Saved replay buffer for task {subtask}.")
 
 # # Test sample
 # import numpy as np
@@ -254,3 +262,153 @@ if save_rb:
 # for step in range(num_train_steps):
 #     batch = rb.sample_batch(batch_size, rng)
 #     print(f"batch={batch}")
+
+# ---------- Loss over mask logits (Q fixed, mask trainable) ----------
+
+def print_values(q_values, q_sa, action, masked_q_values, masked_q_sa, q_diff_loss, l0, total_loss, index):
+    i = index
+    print(f"i={i}\n q_values={q_values[i]}, q_sa={q_sa[i]}, action={action[i]}\n masked_q_values={masked_q_values[i]}, masked_q_sa={masked_q_sa[i]}\n q_diff_loss={q_diff_loss}, l0={l0}, total_loss={total_loss}\n")
+    # print(f"i={i}\n q_values={q_values[i]}, q_sa={q_sa[i]}, action={action[i]}")
+    # jax.debug.print(f"masked_q_values={masked_q_values[i]}, masked_q_sa={masked_q_sa[i]}\n q_diff_loss={q_diff_loss}, l0={l0}, total_loss={total_loss}\n")
+
+def mask_loss_fn(mask_logits, key, batch, q, tau, lmbda):
+    key, subkey = jax.random.split(key)
+
+    # Q: is it better to mimic only the choosen action q value or q values for all actions in a state?
+
+    # Build masked Q-network
+    masked_q = apply_mask_to_q(q, mask_logits, tau, subkey)
+
+    # Q(s, a) from original network
+    q_values = q(batch["observation"])
+    q_sa = jnp.take_along_axis(
+        q_values, batch["action"][..., None], axis=1
+    ).squeeze(-1)
+
+    # Q(s, a) from masked network
+    masked_q_values = masked_q(batch["observation"])
+    masked_q_sa = jnp.take_along_axis(
+        masked_q_values, batch["action"][..., None], axis=1
+    ).squeeze(-1)
+
+    # Loss = mean squared difference between original Q and masked Q
+    q_diff_loss = jnp.mean((q_sa - masked_q_sa) ** 2)
+
+    # L0 regularization on mask logits
+    l0 = l0_regularization(mask_logits, lmbda)
+
+    total_loss = q_diff_loss + l0
+
+    # index = jax.random.randint(subkey, (), 0, q_values.shape[0])
+    # print_values(q_values, q_sa, batch["action"], masked_q_values, masked_q_sa, q_diff_loss, l0, total_loss, index)
+
+    return total_loss, (q_diff_loss, l0)
+
+
+# gamma = 0.99
+
+# def mask_loss_fn(mask_logits, key, batch, q, tau, lmbda):
+#     key, subkey = jax.random.split(key)
+
+#     masked_q = apply_mask_to_q(q, mask_logits, tau, subkey)
+
+#     # Q(s, a) with masked network
+#     masked_q_values = masked_q(batch["observation"])
+#     q_sa = jnp.take_along_axis(
+#         masked_q_values, batch["action"][..., None], axis=1
+#     ).squeeze(-1)
+
+#     # Target: r + gamma * max_a' Q(s', a')  (using same masked net here)
+#     q_next = masked_q(batch["next_observation"])
+#     q_next_max = jnp.max(q_next, axis=1)
+#     target = batch["reward"] + gamma * (1.0 - batch["done"]) * q_next_max
+
+#     td_loss = jnp.mean((q_sa - target) ** 2)
+
+#     # L0 regularization on mask logits
+#     l0 = l0_regularization(mask_logits, lmbda)
+
+#     return td_loss + l0, (td_loss, l0)
+
+mask_loss_grad_fn = jax.value_and_grad(mask_loss_fn, argnums=0, has_aux=True)
+
+# ---------- Optimization loop for mask ----------
+import optax
+
+def optimize_mask_with_rb(q, mask_logits,
+                          rb,
+                          key,
+                          num_collect_steps=5000,
+                          num_train_steps=5000,
+                          batch_size=64,
+                          tau=0.5,
+                          lmbda=1e-4,
+                          lr=1e-3,
+                          seed=seed):
+    
+    optimizer = optax.adam(lr)
+    opt_state = optimizer.init(mask_logits)
+
+    key, subkey = jax.random.split(key)
+    import numpy as np
+    rng = np.random.default_rng(seed)
+
+    for step in range(num_train_steps):
+
+        (observations, actions, rewards, next_observations, terminations)  = rb.sample_batch(batch_size, rng)
+        batch = {
+            "observation": observations,
+            "action": actions,
+            "reward": rewards,
+            "next_observation": next_observations,
+            "termination": terminations,
+        }
+        key, subkey = jax.random.split(key)
+        # total_loss, (q_diff_loss, l0_val) = mask_loss_fn(mask_logits, subkey, batch, q, tau, lmbda)  # for debug
+        (total_loss, (q_diff_loss, l0_val)), grads = mask_loss_grad_fn(
+            mask_logits, subkey, batch, q, tau, lmbda
+        )
+        updates, opt_state = optimizer.update(grads, opt_state)
+        mask_logits = jax.tree_util.tree_map(
+            lambda p, u: p + u, mask_logits, updates
+        )
+
+        if step % 500 == 0:
+            print(f"step {step}: loss={total_loss:.4f}, q_diff_loss={q_diff_loss:.4f}, l0={l0_val:.4f}")
+
+    return mask_logits
+
+# ---------- Usage ----------
+train_mask = True
+load_final_mask = not train_mask
+
+if train_mask:
+    optimized_mask_logits = optimize_mask_with_rb(q, mask_logits, rb, key)
+
+    # Final hard mask and pruned Q-net
+    final_masks = {
+        k: (jax.nn.sigmoid(v) > 0.5).astype(jnp.float32)
+        for k, v in optimized_mask_logits.items()
+    }
+    print(f"final_masks:\n{final_masks}")
+
+subtask_file = f"task_{subtask}_masks.pkl"
+if load_final_mask:
+    with open(subtask_file, "rb") as f:
+        final_masks = pickle.load(f)
+        print(f"loaded_masks:\n{final_masks}")
+
+
+import numpy as np
+
+save_final_mask = True
+if save_final_mask:
+    with open(subtask_file, "wb") as f:
+        pickle.dump({k: np.array(v) for k, v in final_masks.items()}, f)
+
+key, subkey = jax.random.split(key)
+pruned_q_net = apply_mask_to_q(q, final_masks, tau=1e-6, key=subkey)
+
+subnet_policy = get_policy_from_q_net(pruned_q_net)
+evaluate_policy_on_task(subnet_policy, task=subtask)
+
