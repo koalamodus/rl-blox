@@ -74,7 +74,7 @@ policy = get_policy_from_q_net(q)
 
 
 from eval_helper import eval_policy
-def evaluate_policy_on_task(policy, task="all"):
+def evaluate_policy_on_task(policy, task="all", render_mode = "human"):
     # COLOR_NAMES = ["blue"]
     if task == "all":
         task = COLOR_NAMES
@@ -82,10 +82,9 @@ def evaluate_policy_on_task(policy, task="all"):
         task = task if isinstance(task, list) else [task]
     
     for color in task:
-        print(f"color:{color}")
         assert color in COLOR_NAMES
 
-        eval_env = make_ocean_env(color = color, render_mode = "human")
+        eval_env = make_ocean_env(color, render_mode)
         _ = eval_policy(color, eval_env, policy, verbose=True, num_episode=1)
 
 # evaluate_policy_on_task(policy)
@@ -97,16 +96,17 @@ def evaluate_policy_on_task(policy, task="all"):
 import jax
 import jax.numpy as jnp
 
-def get_kernel_shapes(q):
-    state = nnx.state(q)
-    shapes = {}
+def get_kernel_shapes(mlp):
+    kernel_shapes = {}
 
-    for layer_name, params in state.items():
-        for pname, pvalue in params.items():
-            if pname == "kernel":
-                shapes[(layer_name, pname)] = pvalue.value.shape
+    # Hidden layers
+    for i, layer in enumerate(mlp.hidden_layers):
+        kernel_shapes[f"hidden_layer_{i}"] = layer.kernel.value.shape
 
-    return shapes
+    # Output layer
+    kernel_shapes["output_layer"] = mlp.output_layer.kernel.value.shape
+
+    return kernel_shapes
 
 
 def init_mask_logits(shapes, init_value=0.9):
@@ -133,22 +133,44 @@ def hard_concrete_sample(logits, tau, key, hard_threshold = 0.5):
 
     return b
 
+def apply_mask_to_layer(layer_key, params, mask_logits, tau, key):
+    """Apply hard‑concrete mask to all params in a layer."""
+    new_params = {}
+
+    for pname, pvalue in params.items():
+        if pname == "kernel":
+            key, subkey = jax.random.split(key)
+            logits = mask_logits[layer_key]
+            mask = hard_concrete_sample(logits, tau, subkey)
+            new_params[pname] = pvalue.value * mask
+        else:
+            new_params[pname] = pvalue
+
+    return new_params, key
 
 def apply_mask_to_q(q, mask_logits, tau, key):
     state = nnx.state(q)
     new_state = {}
 
     for layer_name, params in state.items():
-        new_state[layer_name] = {}
 
-        for pname, pvalue in params.items():
-            if pname == "kernel":
-                key, subkey = jax.random.split(key)
-                logits = mask_logits[(layer_name, pname)]
-                mask = hard_concrete_sample(logits, tau, subkey)
-                new_state[layer_name][pname] = pvalue.value * mask
-            else:  # bias
-                new_state[layer_name][pname] = pvalue
+        if layer_name == "hidden_layers":
+            new_state[layer_name] = {}
+
+            for idx, layer_params in params.items():
+                layer_key = f"hidden_layer_{idx}"
+                new_state[layer_name][idx], key = apply_mask_to_layer(
+                    layer_key, layer_params, mask_logits, tau, key
+                )
+
+        elif layer_name == "output_layer":
+            layer_key = "output_layer"
+            new_state[layer_name], key = apply_mask_to_layer(
+                layer_key, params, mask_logits, tau, key
+            )
+
+        else:
+            raise ValueError(f"Unexpected layer: {layer_name}")
 
     masked_q_net = get_mlp_with_state(env, nnx.state(new_state))
     return masked_q_net
@@ -156,18 +178,24 @@ def apply_mask_to_q(q, mask_logits, tau, key):
 
 # 1. Get shapes
 shapes = get_kernel_shapes(q)
+print(f"kernel shapes:")
+for name, shape in shapes.items():
+    print(name, shape)
 
 # 2. Create trainable mask logits
 mask_logits = init_mask_logits(shapes)
+# print(f"mask logits init:\n{mask_logits}")
 
 # 3. Use mask during forward pass
 key, subkey = jax.random.split(key)
 masked_q_net = apply_mask_to_q(q, mask_logits, tau=0.5, key=subkey)
+state_masked_q = nnx.state(masked_q_net)
+# print(f"state_masked_q:\n{state_masked_q}")
 
 # # 4. Masked q net
 # # hard masked in forward pass, soft masked in back prop
 # masked_policy = get_policy_from_q_net(masked_q_net)
-# evaluate_policy_on_task(masked_policy)
+# evaluate_policy_on_task(masked_policy, render_mode=None)
 
 
 # ---------- L0 regularization over mask logits ----------
