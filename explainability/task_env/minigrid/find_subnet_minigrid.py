@@ -66,7 +66,6 @@ ckpt_name = "minigrid_oceans_medium_DDQN-UTS_1769513294.4912446_q_step_001930001
 ckpt_path = os.path.expanduser(
     f"~/workspace/XRL/ocean_trained_model/{benchmark}_{grid_size}/uts/seed_{model_seed}/{ckpt_name}"
 )
-
 print(ckpt_path)
 
 q = get_q_net_from_checkpoint(ckpt_path, env)
@@ -261,10 +260,14 @@ num_steps = hparams_algorithm.pop("total_timesteps")
 import pickle
 
 rb_file = f"rb_{subtask}.pkl"
+rb_path = os.path.expanduser(
+    f"~/workspace/XRL/ocean_subnet/{benchmark}_{grid_size}/uts/seed_{model_seed}/{ckpt_name}/{rb_file}"
+)
+os.makedirs(os.path.dirname(rb_path), exist_ok=True)
 
 load_rb = False
 if load_rb:
-    with open(rb_file, "rb") as f:
+    with open(rb_path, "rb") as f:
         rb = pickle.load(f)
         print("Number of transitions:", len(rb))
 
@@ -277,7 +280,7 @@ if len(rb) < rb.buffer_size :
 save_rb = True
 if save_rb:
     import pickle
-    with open(rb_file, "wb") as f:
+    with open(rb_path, "wb") as f:
         pickle.dump(rb, f)
     print(f"Saved replay buffer for task {subtask}.")
 
@@ -412,6 +415,7 @@ load_final_mask = not train_mask
 
 if train_mask:
     optimized_mask_logits = optimize_mask_with_rb(q, mask_logits, rb, key)
+    print(f"optimized_mask_logits:\n{optimized_mask_logits}")
 
     # Final hard mask and pruned Q-net
     final_masks = {
@@ -420,9 +424,18 @@ if train_mask:
     }
     print(f"final_masks:\n{final_masks}")
 
-subtask_file = f"task_{subtask}_masks.pkl"
+mask_file = f"task_{subtask}_masks.pkl"
+logits_file = f"task_{subtask}_logits.pkl"
+mask_path = os.path.expanduser(
+    f"~/workspace/XRL/ocean_subnet/{benchmark}_{grid_size}/uts/seed_{model_seed}/{ckpt_name}/{mask_file}"
+)
+logits_path = os.path.expanduser(
+    f"~/workspace/XRL/ocean_subnet/{benchmark}_{grid_size}/uts/seed_{model_seed}/{ckpt_name}/{logits_file}"
+)
+os.makedirs(os.path.dirname(mask_path), exist_ok=True)
+
 if load_final_mask:
-    with open(subtask_file, "rb") as f:
+    with open(mask_path, "rb") as f:
         final_masks = pickle.load(f)
         print(f"loaded_masks:\n{final_masks}")
 
@@ -431,8 +444,10 @@ import numpy as np
 
 save_final_mask = True
 if save_final_mask:
-    with open(subtask_file, "wb") as f:
+    with open(mask_path, "wb") as f:
         pickle.dump({k: np.array(v) for k, v in final_masks.items()}, f)
+    with open(logits_path, "wb") as f:
+        pickle.dump({k: np.array(v) for k, v in optimized_mask_logits.items()}, f)
 
 key, subkey = jax.random.split(key)
 pruned_q_net = apply_mask_to_q(q, final_masks, tau=1e-6, key=subkey)
