@@ -76,12 +76,14 @@ class FindObjectEnv(MiniGridEnv):
         ax, ay = self.agent_pos
         tx, ty = self.target_pos
 
-        # Reward for reaching the target object
-        if (ax == tx and abs(ay - ty) == 1) or (ay == ty and abs(ax - tx) == 1):
+        # # TODO: get reward only when agent is facing the target
+        # Get reward and terminate, if agent is at the above, below, left, right position to target object
+        if ((abs(ay - ty) + abs(ax - tx)) == 1):
             reward = self._reward()
             terminated = True
-        # Reward for performing the done action next to target object and terminate episode
+        # # TODO: consider to remove done action in training
         # if action == self.actions.done:
+        #     print(f"action: done")
         #     terminated = True
 
         return obs, reward, terminated, truncated, info

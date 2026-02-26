@@ -12,19 +12,42 @@ from eval_helper import (
 
 def eval_all_checkpoints(
     base,
-) -> None: 
-    all = get_all_checkpoints(base)
+) -> None:
+    all_ckpts = get_all_checkpoints(base)
+    all_ckpt_results = {}
 
-    for idx, path in enumerate(all):
+    for idx, path in enumerate(all_ckpts):
         step = int(path.split("_")[-3])
         print(f"step: {step}")
 
+        ckpt_result = {}
 
         policy = get_policy_from_checkpoint(path, env)
-        # COLOR_NAMES = ["blue"]
         for color in COLOR_NAMES:
-            eval_env = make_ocean_env(color = color, render_mode = "human")
-            _ = eval_policy(color, eval_env, policy, verbose=True, num_episode=1)
+            eval_env = make_ocean_env(color=color, render_mode=None)
+            result = eval_policy(color, eval_env, policy, verbose=False)
+
+
+            ckpt_result.update(result)
+        all_ckpt_results[f"step_{step}"] = ckpt_result
+    print_eval_results(all_ckpt_results)
+
+
+def print_eval_results(all_results):
+    if not all_results:
+        print("No evaluation results to display.")
+        return
+
+    print("\n=== Evaluation Results ===")
+
+    for step in sorted(all_results.keys()):
+        print(step)
+
+        for task, result in all_results[step].items():
+            print(f" {task}: {result}")
+    
+    print("\n==========================")
+
 
 benchmark, grid_size = "oceans", "medium"
 seeds = [3, 6, 8, 9]  # successful seeds
@@ -33,7 +56,7 @@ seeds = [3, 6, 8, 9]  # successful seeds
 env = make_ocean_env(color = "red", render_mode = "human")
 
 for seed in seeds:
-    print(f"seed: {seed}")
+    print(f"Evaluating seed {seed}.")
     
     base = os.path.expanduser(
         f"~/workspace/XRL/ocean_trained_model/{benchmark}_{grid_size}/uts/seed_{seed}/"
