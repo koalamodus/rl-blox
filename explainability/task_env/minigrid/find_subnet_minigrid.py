@@ -57,8 +57,9 @@ def get_policy_from_q_net(q):
 
 # Used to map colors to integers
 # COLOR_TO_IDX = {"red": 0, "green": 1, "blue": 2, "purple": 3, "yellow": 4, "grey": 5}
+subtask = "red" # "red", "green", "blue", "purple", "yellow", "grey"
 
-env = make_ocean_env(color = "red", render_mode = "human")
+env = make_ocean_env(color = subtask, render_mode = "human")
 
 benchmark, grid_size = "oceans", "medium"
 model_seed = 3
@@ -74,7 +75,6 @@ policy = get_policy_from_q_net(q)
 
 from eval_helper import eval_policy
 def evaluate_policy_on_task(policy, task="all", render_mode = "human"):
-    # COLOR_NAMES = ["blue"]
     if task == "all":
         task = COLOR_NAMES
     else:
@@ -85,8 +85,10 @@ def evaluate_policy_on_task(policy, task="all", render_mode = "human"):
 
         eval_env = make_ocean_env(color, render_mode)
         _ = eval_policy(color, eval_env, policy, verbose=True, num_episode=1)
+        eval_env.close()
 
-# evaluate_policy_on_task(policy)
+print("evaluate original q network")
+evaluate_policy_on_task(policy, render_mode="None")
 
 # ---------------------------
 # (2) Define masked network
@@ -108,11 +110,11 @@ def get_kernel_shapes(mlp):
     return kernel_shapes
 
 
-def init_mask_logits(shapes, init_value=0.9):
-    mask_logits = {}
-    for key, shape in shapes.items():
-        mask_logits[key] = jnp.full(shape, init_value)
-    return mask_logits
+class MaskNet(nnx.Module):
+    def __init__(self, shapes, init_value=0.9):
+        # For each layer we store a Param
+        for key, shape in shapes.items():
+            setattr(self, key, nnx.Param(jnp.full(shape, init_value)))
 
 
 def hard_concrete_sample(logits, tau, key, hard_threshold = 0.5):
@@ -132,42 +134,65 @@ def hard_concrete_sample(logits, tau, key, hard_threshold = 0.5):
 
     return b
 
-def apply_mask_to_layer(layer_key, params, mask_logits, tau, key):
-    """Apply hard‑concrete mask to all params in a layer."""
+
+def apply_mask_to_layer(layer_key, mask_param, logit_val, tau, key):
+    """
+    Apply a hard‑concrete mask to the weight kernel of a layer using `logit_val`.
+    """
     new_params = {}
 
-    for pname, pvalue in params.items():
+    # TODO: check details
+    for pname, pval in mask_param.items():
         if pname == "kernel":
             key, subkey = jax.random.split(key)
-            logits = mask_logits[layer_key]
-            mask = hard_concrete_sample(logits, tau, subkey)
-            new_params[pname] = pvalue.value * mask
+
+            # sample concrete mask from logits
+            mask = hard_concrete_sample(logit_val, tau, subkey)
+
+            # apply it
+            new_params[pname] = pval.value * mask
+            
+            if len(pval.value) != len(mask):
+                print(f"len(pval.value):{len(pval.value)}, len(mask):{len(mask)}")
+
+        elif pname == "bias":
+            new_params[pname] = pval.value
+
         else:
-            new_params[pname] = pvalue
+            raise ValueError(f"Unexpected param name in layer {layer_key}: {pname}")
 
-    return new_params, key
+    return new_params
 
-def apply_mask_to_q(q, mask_logits, tau, key):
-    state = nnx.state(q)
+def apply_mask_to_q(q, mask_model, tau, key):
+    # Get the full state for network q
+    state = nnx.state(q)  # A nested State mapping of layers and Param states
     new_state = {}
 
-    for layer_name, params in state.items():
-
+    for layer_name, q_param in state.items():
         if layer_name == "hidden_layers":
             new_state[layer_name] = {}
 
-            for idx, layer_params in params.items():
+            for idx, layer_params in q_param.items():
                 layer_key = f"hidden_layer_{idx}"
-                new_state[layer_name][idx], key = apply_mask_to_layer(
-                    layer_key, layer_params, mask_logits, tau, key
+
+                # Extract the mask for this layer from mask_model
+                mask_logits = getattr(mask_model, layer_key).value
+
+                # Apply the mask to this layer’s q_param
+                key, subkey = jax.random.split(key)
+                new_state[layer_name][idx] = apply_mask_to_layer(
+                    layer_key, layer_params, mask_logits, tau, subkey
                 )
 
         elif layer_name == "output_layer":
+            # Output layer mask
             layer_key = "output_layer"
-            new_state[layer_name], key = apply_mask_to_layer(
-                layer_key, params, mask_logits, tau, key
-            )
+            mask_logits = getattr(mask_model, layer_key).value
 
+            key, subkey = jax.random.split(key)
+            new_state[layer_name] = apply_mask_to_layer(
+                layer_key, q_param, mask_logits, tau, subkey
+            )
         else:
             raise ValueError(f"Unexpected layer: {layer_name}")
 
@@ -182,14 +207,12 @@ for name, shape in shapes.items():
     print(name, shape)
 
 # 2. Create trainable mask logits
-mask_logits = init_mask_logits(shapes)
-# print(f"mask logits init:\n{mask_logits}")
+mask_model = MaskNet(shapes, init_value=0.9)
 
 # 3. Use mask during forward pass
 key, subkey = jax.random.split(key)
-masked_q_net = apply_mask_to_q(q, mask_logits, tau=0.5, key=subkey)
+masked_q_net = apply_mask_to_q(q, mask_model, tau=0.5, key=subkey)
 state_masked_q = nnx.state(masked_q_net)
-# print(f"state_masked_q:\n{state_masked_q}")
 
 # # 4. Masked q net
 # # hard masked in forward pass, soft masked in back prop
@@ -198,20 +221,20 @@ state_masked_q = nnx.state(masked_q_net)
 
 
 # ---------- L0 regularization over mask logits ----------
+def l0_regularization(mask_model, lmbda):
+    state = nnx.state(mask_model)
 
-def l0_regularization(mask_logits, lmbda):
-    reg = 0.0
-    for logits in mask_logits.values():
-        reg += jnp.sum(jax.nn.sigmoid(logits))
-    return lmbda * reg
+    all_logits = jnp.concatenate(
+        [v.value.ravel() for v in state.values()]
+    )
+    all_logits_sizs = all_logits.size
+    return lmbda * jnp.sum(jax.nn.sigmoid(all_logits)) / all_logits_sizs
 
 # ---------- Simple rollout + replay buffer utilities ----------
 
 import warnings
 from tqdm import tqdm
 from rl_blox.blox.replay_buffer import ReplayBuffer
-
-subtask = "green" # "red", "green", "blue", "purple", "yellow", "grey"
 
 def collect_task_data(rb, num_steps, q, task):
     env = make_ocean_env(color = task, render_mode = "None")
@@ -276,7 +299,7 @@ if len(rb) < rb.buffer_size :
     collect_task_data(rb, num_steps, q, task=subtask)
 
 
-# # Save experience in replay buffer
+# Save experience in replay buffer
 save_rb = True
 if save_rb:
     import pickle
@@ -302,31 +325,13 @@ def print_values(q_values, q_sa, action, masked_q_values, masked_q_sa, q_diff_lo
     # print(f"i={i}\n q_values={q_values[i]}, q_sa={q_sa[i]}, action={action[i]}")
     # jax.debug.print(f"masked_q_values={masked_q_values[i]}, masked_q_sa={masked_q_sa[i]}\n q_diff_loss={q_diff_loss}, l0={l0}, total_loss={total_loss}\n")
 
-def mask_loss_fn(mask_logits, key, batch, q, tau, lmbda):
-    key, subkey = jax.random.split(key)
-
-    # Q: is it better to mimic only the choosen action q value or q values for all actions in a state?
-
-    # Build masked Q-network
-    masked_q = apply_mask_to_q(q, mask_logits, tau, subkey)
-
-    # Q(s, a) from original network
-    q_values = q(batch["observation"])
-    q_sa = jnp.take_along_axis(
-        q_values, batch["action"][..., None], axis=1
-    ).squeeze(-1)
-
-    # Q(s, a) from masked network
-    masked_q_values = masked_q(batch["observation"])
-    masked_q_sa = jnp.take_along_axis(
-        masked_q_values, batch["action"][..., None], axis=1
-    ).squeeze(-1)
+def mask_loss_fn(mask_params, q_sa, masked_q_sa, lmbda):
 
     # Loss = mean squared difference between original Q and masked Q
     q_diff_loss = jnp.mean((q_sa - masked_q_sa) ** 2)
 
     # L0 regularization on mask logits
-    l0 = l0_regularization(mask_logits, lmbda)
+    l0 = l0_regularization(mask_params, lmbda)
 
     total_loss = q_diff_loss + l0
 
@@ -336,49 +341,41 @@ def mask_loss_fn(mask_logits, key, batch, q, tau, lmbda):
     return total_loss, (q_diff_loss, l0)
 
 
-# gamma = 0.99
-
-# def mask_loss_fn(mask_logits, key, batch, q, tau, lmbda):
-#     key, subkey = jax.random.split(key)
-
-#     masked_q = apply_mask_to_q(q, mask_logits, tau, subkey)
-
-#     # Q(s, a) with masked network
-#     masked_q_values = masked_q(batch["observation"])
-#     q_sa = jnp.take_along_axis(
-#         masked_q_values, batch["action"][..., None], axis=1
-#     ).squeeze(-1)
-
-#     # Target: r + gamma * max_a' Q(s', a')  (using same masked net here)
-#     q_next = masked_q(batch["next_observation"])
-#     q_next_max = jnp.max(q_next, axis=1)
-#     target = batch["reward"] + gamma * (1.0 - batch["done"]) * q_next_max
-
-#     td_loss = jnp.mean((q_sa - target) ** 2)
-
-#     # L0 regularization on mask logits
-#     l0 = l0_regularization(mask_logits, lmbda)
-
-#     return td_loss + l0, (td_loss, l0)
-
 mask_loss_grad_fn = jax.value_and_grad(mask_loss_fn, argnums=0, has_aux=True)
 
 # ---------- Optimization loop for mask ----------
 import optax
 
-def optimize_mask_with_rb(q, mask_logits,
+def q_sa_from_network(network, observations, actions):
+    """
+    Computes Q(s, a) for given observations and actions
+    using the provided network.
+    
+    Args:
+        network: Callable that maps observations -> Q-values
+        observations: Batch of observations
+        actions: Batch of actions (shape: [batch_size])
+        
+    Returns:
+        Q(s, a) values (shape: [batch_size])
+    """
+    q_values = network(observations)
+    q_sa = jnp.take_along_axis(
+            q_values, actions[..., None], axis=1
+        ).squeeze(-1)
+    return q_sa
+
+def optimize_mask_with_rb(q, mask_model,
                           rb,
                           key,
-                          num_collect_steps=5000,
                           num_train_steps=5000,
                           batch_size=64,
                           tau=0.5,
-                          lmbda=1e-4,
+                          lmbda=1e-2,
                           lr=1e-3,
                           seed=seed):
     
-    optimizer = optax.adam(lr)
-    opt_state = optimizer.init(mask_logits)
+    optimizer = nnx.Optimizer(mask_model, optax.adam(lr), wrt=nnx.Param)
 
     key, subkey = jax.random.split(key)
     import numpy as np
@@ -387,42 +384,103 @@ def optimize_mask_with_rb(q, mask_logits,
     for step in range(num_train_steps):
 
         (observations, actions, rewards, next_observations, terminations)  = rb.sample_batch(batch_size, rng)
-        batch = {
-            "observation": observations,
-            "action": actions,
-            "reward": rewards,
-            "next_observation": next_observations,
-            "termination": terminations,
-        }
-        key, subkey = jax.random.split(key)
-        # total_loss, (q_diff_loss, l0_val) = mask_loss_fn(mask_logits, subkey, batch, q, tau, lmbda)  # for debug
+        
+        # Q: is it better to mimic only the choosen action q value or q values for all actions in a state?
+
+        # Build masked Q-network
+        masked_q = apply_mask_to_q(q, mask_model, tau, subkey)
+
+        masked_q_sa = q_sa_from_network(
+            masked_q,
+            observations,
+            actions,
+        )
+        q_sa = q_sa_from_network(
+            q,
+            observations,
+            actions,
+        )
+        
+        mask_params = nnx.state(mask_model)
+        # total_loss, (q_diff_loss, l0_val) = mask_loss_fn(mask_params, q_sa, masked_q_sa, lmbda)  # for debug
         (total_loss, (q_diff_loss, l0_val)), grads = mask_loss_grad_fn(
-            mask_logits, subkey, batch, q, tau, lmbda
+            mask_params, q_sa, masked_q_sa, lmbda
         )
-        updates, opt_state = optimizer.update(grads, opt_state)
-        mask_logits = jax.tree_util.tree_map(
-            lambda p, u: p + u, mask_logits, updates
-        )
+        # print(f"mask logits:\n{mask_params}")
+        # print(f"grads:\n{grads}")
+
+        optimizer.update(mask_model, grads)
+
+        # train_step = partial(train_step_with_loss, ddqn_loss)
+        # train_step = partial(nnx.jit, static_argnames=("gamma",))(train_step)        
+        # def train_step_with_loss(
+        #     loss, optimizer: nnx.Optimizer, q: nnx.Module, *args, **kwargs
+        # ) -> tuple[float, float]:
+        #     grad_fn = nnx.value_and_grad(loss, argnums=0, has_aux=True)
+        #     value, grad = grad_fn(q, *args, **kwargs)
+        #     optimizer.update(q, grad)
+        # return value
 
         if step % 500 == 0:
             print(f"step {step}: loss={total_loss:.4f}, q_diff_loss={q_diff_loss:.4f}, l0={l0_val:.4f}")
+            print(f"mask logits:\n{mask_params}")
 
-    return mask_logits
+    return mask_model
+
+#----------- Plot -----------
+import matplotlib.pyplot as plt
+import numpy as np
+import math
+
+def plot_binarized_state(state):
+    layer_names = list(state.keys())
+    n_layers = len(layer_names)
+
+    # Choose subplot grid automatically
+    ncols = math.ceil(math.sqrt(n_layers))
+    nrows = math.ceil(n_layers / ncols)
+
+    fig, axes = plt.subplots(nrows, ncols, figsize=(4*ncols, 4*nrows))
+    axes = np.array(axes).reshape(-1)  # flatten in case of 2D grid
+
+    for i, layer_name in enumerate(layer_names):
+        arr = np.array(state[layer_name]['value'])  # JAX → NumPy
+
+        axes[i].imshow(arr, cmap="gray", aspect="auto")
+        axes[i].set_title(layer_name)
+        axes[i].set_xlabel("Output units")
+        axes[i].set_ylabel("Input units")
+
+    # Hide unused subplots (if grid > layers)
+    for j in range(i + 1, len(axes)):
+        axes[j].axis("off")
+
+    plt.tight_layout()
+    plt.show()
+
 
 # ---------- Usage ----------
 train_mask = True
+save_final_mask = True
 load_final_mask = not train_mask
 
+def binarize_state(state):
+    return state.map(
+        lambda path, var: var.replace(
+            value=(jax.nn.sigmoid(var.value) > 0.5).astype(jnp.float32)
+        )
+    )
+
 if train_mask:
-    optimized_mask_logits = optimize_mask_with_rb(q, mask_logits, rb, key)
-    print(f"optimized_mask_logits:\n{optimized_mask_logits}")
+    optimized_mask_model = optimize_mask_with_rb(q, mask_model, rb, key)
+    print(f"optimized_mask_model:\n{optimized_mask_model}")
 
     # Final hard mask and pruned Q-net
-    final_masks = {
-        k: (jax.nn.sigmoid(v) > 0.5).astype(jnp.float32)
-        for k, v in optimized_mask_logits.items()
-    }
-    print(f"final_masks:\n{final_masks}")
+    mask_params = nnx.state(optimized_mask_model)
+    final_masks_params = binarize_state(mask_params)
+    state_final_masks = nnx.state(final_masks_params)
+    print(f"state_final_masks:\n{state_final_masks}")
+    plot_binarized_state(state_final_masks)
 
 mask_file = f"task_{subtask}_masks.pkl"
 logits_file = f"task_{subtask}_logits.pkl"
@@ -436,22 +494,25 @@ os.makedirs(os.path.dirname(mask_path), exist_ok=True)
 
 if load_final_mask:
     with open(mask_path, "rb") as f:
-        final_masks = pickle.load(f)
-        print(f"loaded_masks:\n{final_masks}")
+        state_final_masks = pickle.load(f)
+        print(f"loaded_masks:\n{state_final_masks}")
+    # Recreate model first
+    final_masks_params = MaskNet(shapes, init_value=0.9)
+    nnx.update(final_masks_params, state_final_masks)
 
+    plot_binarized_state(state_final_masks)
 
-import numpy as np
-
-save_final_mask = True
 if save_final_mask:
     with open(mask_path, "wb") as f:
-        pickle.dump({k: np.array(v) for k, v in final_masks.items()}, f)
+        pickle.dump(state_final_masks, f)
     with open(logits_path, "wb") as f:
-        pickle.dump({k: np.array(v) for k, v in optimized_mask_logits.items()}, f)
+        pickle.dump(mask_params, f)
 
+# TODO: apply final mask directly without drawing hard concrete sample
 key, subkey = jax.random.split(key)
-pruned_q_net = apply_mask_to_q(q, final_masks, tau=1e-6, key=subkey)
+pruned_q_net = apply_mask_to_q(q, final_masks_params, tau=1e-6, key=subkey)
 
 subnet_policy = get_policy_from_q_net(pruned_q_net)
-evaluate_policy_on_task(subnet_policy, task=subtask)
+print(f"evaluate subnet for task {subtask}")
+evaluate_policy_on_task(subnet_policy, task=subtask, render_mode="None")
 
