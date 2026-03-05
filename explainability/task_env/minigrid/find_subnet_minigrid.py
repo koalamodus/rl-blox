@@ -112,12 +112,6 @@ def get_kernel_shapes(mlp):
     return kernel_shapes
 
 
-# class MaskNet(nnx.Module):
-#     def __init__(self, shapes, init_value=0.9):
-#         # For each layer we store a Param
-#         for key, shape in shapes.items():
-#             setattr(self, key, nnx.Param(jnp.full(shape, init_value)))
-
 class MaskNet(nnx.Module):
     def __init__(self, shapes, key, init_value=0.9, noise_scale=0.01):
         """
@@ -159,14 +153,13 @@ def hard_concrete_sample(logits, tau, key, hard_threshold = 0.5):
 
     return b, key
 
-
+# TODO: combine functions for trainable mask and final mask
 def apply_mask_to_layer(layer_key, mask_param, logit_val, tau, key):
     """
     Apply a hard‑concrete mask to the weight kernel of a layer using `logit_val`.
     """
     new_params = {}
 
-    # TODO: check details
     for pname, pval in mask_param.items():
         if pname == "kernel":
             # key, subkey = jax.random.split(key)
@@ -321,15 +314,15 @@ mask_model = MaskNet(shapes, subkey, init_value=0.9, noise_scale=0.01)
 # evaluate_policy_on_task(masked_policy, render_mode=None)
 
 
-# ---------- L0 regularization over mask logits ----------
-def l0_regularization(mask_model, lmbda):
+# ---------- Sparsity regularization over mask logits ----------
+def sparsity_regularization(mask_model):
     state = nnx.state(mask_model)
 
     all_logits = jnp.concatenate(
         [v.value.ravel() for v in state.values()]
     )
     all_logits_sizs = all_logits.size
-    return lmbda * jnp.sum(jax.nn.sigmoid(all_logits)) / all_logits_sizs
+    return jnp.sum(jax.nn.sigmoid(all_logits)) / all_logits_sizs
 
 def compute_mask_sparsity(mask_model):
     state = nnx.state(mask_model)
@@ -441,15 +434,15 @@ def mask_loss_fn(mask_params, q_sa, masked_q_sa, lmbda):
     # Loss = mean squared difference between original Q and masked Q
     q_diff_loss = jnp.mean((q_sa - masked_q_sa) ** 2)
 
-    # L0 regularization on mask logits
-    l0 = l0_regularization(mask_params, lmbda)
+    # sparsity regularization on mask logits
+    sparsity_loss = sparsity_regularization(mask_params)
 
-    total_loss = q_diff_loss + l0
+    total_loss = q_diff_loss + lmbda*sparsity_loss
 
     # index = jax.random.randint(subkey, (), 0, q_values.shape[0])
     # print_values(q_values, q_sa, batch["action"], masked_q_values, masked_q_sa, q_diff_loss, l0, total_loss, index)
 
-    return total_loss, (q_diff_loss, l0)
+    return total_loss, (q_diff_loss, sparsity_loss)
 
 
 mask_loss_grad_fn = jax.value_and_grad(mask_loss_fn, argnums=0, has_aux=True)
@@ -476,14 +469,14 @@ def q_sa_from_network(network, observations, actions):
         ).squeeze(-1)
     return q_sa
 
-def optimize_mask_with_rb(q, mask_model,
-                          rb,
-                          key,
-                          num_train_steps=5000,
+def optimize_mask_with_rb(q, mask_model, rb, key,
+                          num_train_steps=50000,
                           batch_size=64,
                           tau=0.5,
-                          lmbda=5e-3,
+                          lmbda=1e-3,
                           lr=1e-3,
+                          sparsity_threshold=0.5,
+                          q_diff_loss_threshold=0.1,
                           seed=seed):
     
     optimizer = nnx.Optimizer(mask_model, optax.adam(lr), wrt=nnx.Param)
@@ -513,22 +506,21 @@ def optimize_mask_with_rb(q, mask_model,
         )
         
         mask_params = nnx.state(mask_model)
-        # total_loss, (q_diff_loss, l0_val) = mask_loss_fn(mask_params, q_sa, masked_q_sa, lmbda)  # for debug
-        (total_loss, (q_diff_loss, l0_val)), grads = mask_loss_grad_fn(
+        # total_loss, (q_diff_loss, sparsity_loss) = mask_loss_fn(mask_params, q_sa, masked_q_sa, lmbda)  # for debug
+        (total_loss, (q_diff_loss, sparsity_loss)), grads = mask_loss_grad_fn(
             mask_params, q_sa, masked_q_sa, lmbda
         )
         # print(f"mask logits:\n{mask_params}")
         # print(f"grads:\n{grads}")
 
         optimizer.update(mask_model, grads)
-
-        sparsity = compute_mask_sparsity(mask_model)
-        if sparsity > 0.5:
-                print(f"step {step}: loss={total_loss:.4f}, q_diff_loss={q_diff_loss:.4f}, l0={l0_val:.4f}, sparsity={sparsity}")
-                break
+        mask_sparsity = compute_mask_sparsity(mask_model)
+        if (mask_sparsity > sparsity_threshold) and (q_diff_loss < q_diff_loss_threshold**2):
+            print(f"step {step}: loss={total_loss:.4f}, q_diff_loss={q_diff_loss:.4f}, sparsity_loss={sparsity_loss:.4f}")
+            break
 
         if step % 500 == 0:
-            print(f"step {step}: loss={total_loss:.4f}, q_diff_loss={q_diff_loss:.4f}, l0={l0_val:.4f}, sparsity={sparsity}")
+            print(f"step {step}: loss={total_loss:.4f}, q_diff_loss={q_diff_loss:.4f}, sparsity_loss={sparsity_loss:.4f}")
             # if sparsity > 0.5: break
 
     return mask_model
@@ -538,6 +530,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import math
 
+# TODO: plot state with 1:1 ratio
 def plot_binarized_state(state):
     layer_names = list(state.keys())
     n_layers = len(layer_names)
