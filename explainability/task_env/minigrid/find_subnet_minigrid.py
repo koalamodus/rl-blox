@@ -411,16 +411,6 @@ if save_rb:
         pickle.dump(rb, f)
     print(f"Saved replay buffer for task {subtask}.")
 
-# # Test sample
-# import numpy as np
-# rng = np.random.default_rng(seed)
-
-# num_train_steps=10000
-# batch_size=64
-# for step in range(num_train_steps):
-#     batch = rb.sample_batch(batch_size, rng)
-#     print(f"batch={batch}")
-
 # ---------- Loss over mask logits (Q fixed, mask trainable) ----------
 
 def print_values(q_values, q_sa, action, masked_q_values, masked_q_sa, q_diff_loss, l0, total_loss, index):
@@ -429,10 +419,10 @@ def print_values(q_values, q_sa, action, masked_q_values, masked_q_sa, q_diff_lo
     # print(f"i={i}\n q_values={q_values[i]}, q_sa={q_sa[i]}, action={action[i]}")
     # jax.debug.print(f"masked_q_values={masked_q_values[i]}, masked_q_sa={masked_q_sa[i]}\n q_diff_loss={q_diff_loss}, l0={l0}, total_loss={total_loss}\n")
 
-def mask_loss_fn(mask_params, q_sa, masked_q_sa, lmbda):
+def mask_loss_fn(mask_params, q_values, masked_q_values, lmbda):
 
     # Loss = mean squared difference between original Q and masked Q
-    q_diff_loss = jnp.mean((q_sa - masked_q_sa) ** 2)
+    q_diff_loss = jnp.mean((q_values - masked_q_values) ** 2)
 
     # sparsity regularization on mask logits
     sparsity_loss = sparsity_regularization(mask_params)
@@ -449,25 +439,6 @@ mask_loss_grad_fn = jax.value_and_grad(mask_loss_fn, argnums=0, has_aux=True)
 
 # ---------- Optimization loop for mask ----------
 import optax
-
-def q_sa_from_network(network, observations, actions):
-    """
-    Computes Q(s, a) for given observations and actions
-    using the provided network.
-    
-    Args:
-        network: Callable that maps observations -> Q-values
-        observations: Batch of observations
-        actions: Batch of actions (shape: [batch_size])
-        
-    Returns:
-        Q(s, a) values (shape: [batch_size])
-    """
-    q_values = network(observations)
-    q_sa = jnp.take_along_axis(
-            q_values, actions[..., None], axis=1
-        ).squeeze(-1)
-    return q_sa
 
 def optimize_mask_with_rb(q, mask_model, rb, key,
                           num_train_steps=50000,
@@ -494,34 +465,25 @@ def optimize_mask_with_rb(q, mask_model, rb, key,
         key, subkey = jax.random.split(key)
         masked_q = apply_mask_to_q(q, mask_model, tau, subkey)
 
-        masked_q_sa = q_sa_from_network(
-            masked_q,
-            observations,
-            actions,
-        )
-        q_sa = q_sa_from_network(
-            q,
-            observations,
-            actions,
-        )
+        masked_q_values = masked_q(observations)
+        q_values = q(observations)
         
         mask_params = nnx.state(mask_model)
         # total_loss, (q_diff_loss, sparsity_loss) = mask_loss_fn(mask_params, q_sa, masked_q_sa, lmbda)  # for debug
         (total_loss, (q_diff_loss, sparsity_loss)), grads = mask_loss_grad_fn(
-            mask_params, q_sa, masked_q_sa, lmbda
+            mask_params, q_values, masked_q_values, lmbda
         )
         # print(f"mask logits:\n{mask_params}")
         # print(f"grads:\n{grads}")
 
         optimizer.update(mask_model, grads)
         mask_sparsity = compute_mask_sparsity(mask_model)
-        if (mask_sparsity > sparsity_threshold) and (q_diff_loss < q_diff_loss_threshold**2):
+        if (mask_sparsity > sparsity_threshold) and (q_diff_loss < q_diff_loss_threshold):
             print(f"step {step}: loss={total_loss:.4f}, q_diff_loss={q_diff_loss:.4f}, sparsity_loss={sparsity_loss:.4f}")
             break
 
         if step % 500 == 0:
-            print(f"step {step}: loss={total_loss:.4f}, q_diff_loss={q_diff_loss:.4f}, sparsity_loss={sparsity_loss:.4f}")
-            # if sparsity > 0.5: break
+            print(f"step {step}: loss={total_loss:.4f}, q_diff_loss={q_diff_loss:.4f}, sparsity_loss={sparsity_loss:.4f}, mask_sparsity={mask_sparsity:.4f}")
 
     return mask_model
 
@@ -530,7 +492,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import math
 
-# TODO: plot state with 1:1 ratio
 def plot_binarized_state(state):
     layer_names = list(state.keys())
     n_layers = len(layer_names)
@@ -543,9 +504,9 @@ def plot_binarized_state(state):
     axes = np.array(axes).reshape(-1)  # flatten in case of 2D grid
 
     for i, layer_name in enumerate(layer_names):
-        arr = np.array(state[layer_name]['value'])  # JAX → NumPy
+        arr = np.array(state[layer_name].value)  # JAX → NumPy
 
-        axes[i].imshow(arr, cmap="gray", aspect="auto")
+        axes[i].imshow(arr, cmap="gray", aspect="equal")
         axes[i].set_title(layer_name)
         axes[i].set_xlabel("Output units")
         axes[i].set_ylabel("Input units")
