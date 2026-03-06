@@ -44,35 +44,65 @@ print(f"Replay buffer length: {len(actions)}")
 # ---------------------------
 class MaskedMLP(nnx.Module):
     """Masked wrapper for a pretrained MLP for circuit discovery."""
-
-    def __init__(self, base_mlp: MLP, rngs: nnx.Rngs, init_bias_logit=4.0, init_std=0.01, mask_bias=False):
+    
+    # TODO: use jax random seed
+    def __init__(self, base_mlp: MLP, rngs: nnx.Rngs, init_bias_logit=0.9, init_std=0.01, mask_bias=False):
         self.base = base_mlp
         self.mask_bias = mask_bias
         base_state = nnx.state(self.base)
 
-        # Initialize mask logits for all kernels (and optionally biases)
         self.masks = {}
-        for layer_name, layer_params in base_state.items():
-            self.masks[layer_name] = {}
+
+        def create_masks(layer_params):
+            masks = {}
             for param_name, param_value in layer_params.items():
-                if param_name == 'kernel' or (mask_bias and param_name == 'bias'):
+                if param_name == "kernel" or (mask_bias and param_name == "bias"):
                     shape = param_value.value.shape
                     key = rngs()
                     init = jax.nn.initializers.normal(init_std)(key, shape) + init_bias_logit
-                    self.masks[layer_name][param_name] = nnx.Param(init)
+                    masks[param_name] = nnx.Param(init)
+            return masks
 
+        # hidden layers
+        self.masks["hidden_layers"] = {
+            layer_idx: create_masks(base_state["hidden_layers"][layer_idx])
+            for layer_idx in base_state["hidden_layers"]
+        }
+
+        # output layer
+        self.masks["output_layer"] = create_masks(base_state["output_layer"])
+    
+    # TODO: change soft mask to hard mask in forward loop, use straight-through-estimator
     def _masked_state(self):
         """Return a masked copy of base network parameters."""
         base_state = nnx.state(self.base)
         masked_state = {}
-        for layer_name, layer_params in base_state.items():
-            masked_state[layer_name] = {}
+
+        def apply_masks(layer_params, mask_params):
+            out = {}
             for param_name, param_value in layer_params.items():
-                if param_name in self.masks[layer_name]:
-                    mask = jax.nn.sigmoid(self.masks[layer_name][param_name].value)
-                    masked_state[layer_name][param_name] = nnx.Param(param_value.value * mask)
+                if param_name in mask_params:
+                    mask = jax.nn.sigmoid(mask_params[param_name].value)
+                    out[param_name] = nnx.Param(param_value.value * mask)
                 else:
-                    masked_state[layer_name][param_name] = param_value
+                    out[param_name] = param_value
+            return out
+
+        # hidden layers
+        masked_state["hidden_layers"] = {
+            layer_idx: apply_masks(
+                base_state["hidden_layers"][layer_idx],
+                self.masks["hidden_layers"][layer_idx],
+            )
+            for layer_idx in base_state["hidden_layers"]
+        }
+
+        # output layer
+        masked_state["output_layer"] = apply_masks(
+            base_state["output_layer"],
+            self.masks["output_layer"],
+        )
+
         return nnx.state(masked_state)
 
     def __call__(self, x):
@@ -83,48 +113,88 @@ class MaskedMLP(nnx.Module):
         """Return pruned parameters with masks hard-thresholded."""
         base_state = nnx.state(self.base)
         pruned_weights = {}
-        for layer_name, layer_params in base_state.items():
-            pruned_weights[layer_name] = {}
-            for param_name, param_value in layer_params.items():
-                if param_name in self.masks[layer_name]:
-                    mask = (jax.nn.sigmoid(self.masks[layer_name][param_name].value) >= threshold).astype(param_value.value.dtype)
-                    pruned_weights[layer_name][param_name] = nnx.Param(param_value.value * mask)
-                else:
-                    pruned_weights[layer_name][param_name] = param_value
-        return pruned_weights
 
+        def apply_threshold(layer_params, mask_params):
+            out = {}
+            for param_name, param_value in layer_params.items():
+                if param_name in mask_params:
+                    mask = (
+                        jax.nn.sigmoid(mask_params[param_name].value) >= threshold
+                    ).astype(param_value.value.dtype)
+                    out[param_name] = nnx.Param(param_value.value * mask)
+                else:
+                    out[param_name] = param_value
+            return out
+
+        # hidden layers
+        pruned_weights["hidden_layers"] = {
+            layer_idx: apply_threshold(
+                base_state["hidden_layers"][layer_idx],
+                self.masks["hidden_layers"][layer_idx],
+            )
+            for layer_idx in base_state["hidden_layers"]
+        }
+
+        # output layer
+        pruned_weights["output_layer"] = apply_threshold(
+            base_state["output_layer"],
+            self.masks["output_layer"],
+        )
+
+        return pruned_weights
+    
     def sparsity_fraction(self, threshold=0.5):
         """Return fraction of weights kept (kernels only by default)."""
-        total, kept = 0, 0
-        for layer_name, layer_params in self.masks.items():
-            for param_name, mask_param in layer_params.items():
+
+        def count_masks(mask_params):
+            kept, total = 0, 0
+            for mask_param in mask_params.values():
                 mask = jax.nn.sigmoid(mask_param.value)
                 hard = (mask >= threshold).astype(jnp.int32)
                 total += hard.size
                 kept += int(hard.sum())
+            return kept, total
+
+        kept, total = 0, 0
+
+        # hidden layers
+        for layer_masks in self.masks["hidden_layers"].values():
+            k, t = count_masks(layer_masks)
+            kept += k
+            total += t
+
+        # output layer
+        k, t = count_masks(self.masks["output_layer"])
+        kept += k
+        total += t
+
         return kept / max(1, total)
 
 # Instantiate masked network
 masked_net = MaskedMLP(q, nnx.Rngs(seed+2))
+# nnx.display(masked_net)
 
 # ---------------------------
 # (3) Behavior cloning loss for circuit discovery
 # ---------------------------
-def mask_penalty(masks: dict) -> jnp.ndarray:
+def soft_mask_sparsity(masks: dict) -> jnp.ndarray:
     """Compute total sparsity penalty over all mask logits."""
-    total = 0.0
-    for layer in masks.values():  # e.g., hidden_layers, output_layer
-        if isinstance(layer, dict):
-            for param in layer.values():  # kernel / bias
-                total += jnp.sum(jax.nn.sigmoid(param.value))
-        else:
-            total += jnp.sum(jax.nn.sigmoid(layer.value))
-    return total
+    sparsity = 0.0
 
-def bc_loss(masked_net, batch, sparsity_lambda=1e-3):
+    # hidden layers
+    for layer_masks in masks.get("hidden_layers", {}).values():
+        for param_mask in layer_masks.values():  # kernel / bias
+            sparsity += jnp.sum(jax.nn.sigmoid(param_mask.value))
+
+    # output layer
+    for param_mask in masks.get("output_layer", {}).values():
+        sparsity += jnp.sum(jax.nn.sigmoid(param_mask.value))
+
+    return sparsity
+
+def bc_loss(masked_net, batch):
     """
-    Behavior cloning loss with sparsity regularization.
-
+    Behavior cloning loss
     Args:
         masked_net: MaskedMLP instance
         batch: dict with 'obs' and 'act' arrays
@@ -139,14 +209,18 @@ def bc_loss(masked_net, batch, sparsity_lambda=1e-3):
     selected_log_probs = jnp.take_along_axis(log_probs, act_indices, axis=1).squeeze(1)
 
     bc_loss_val = -jnp.mean(selected_log_probs)
-    sparsity_penalty = sparsity_lambda * mask_penalty(masked_net.masks)
-    total_loss = bc_loss_val + sparsity_penalty
+    return bc_loss_val
+
+def subnetwork_loss(masked_net, batch, sparsity_lambda=1e-3):
+    bc_loss_val = bc_loss(masked_net, batch)
+
+    sparsity_loss = sparsity_lambda * soft_mask_sparsity(masked_net.masks)
+    total_loss = bc_loss_val + sparsity_loss
 
     metrics = {
         'bc_loss': bc_loss_val,
-        'sparsity_penalty': sparsity_penalty
+        'sparsity_loss': sparsity_loss
     }
-
     return total_loss, metrics
 
 # ---------------------------
@@ -156,7 +230,7 @@ from tqdm import tqdm
 
 batch_size = 128
 num_steps = 50_000
-lambda_start, lambda_end = 1e-6, 1e-2
+lambda_start, lambda_end = 1e-6, 1e-6
 warmup_steps = 3_000
 threshold_eval = 0.5
 lr = 3e-4
@@ -181,13 +255,17 @@ for step in tqdm(range(1, num_steps + 1), desc="Training"):
     key, sk = jr.split(key)
     batch = sample_batch(rb, batch_size, key=sk)
     lam = sparsity_schedule(step, lambda_start, lambda_end, warmup_steps, num_steps)
-    (loss_val, metrics), grads = nnx.value_and_grad(bc_loss, has_aux=True)(masked_net, batch, lam)
+    (loss_val, metrics), grads = nnx.value_and_grad(subnetwork_loss, has_aux=True)(masked_net, batch, lam)
     optimizer.update(masked_net, grads)
 
     if step % 1000 == 0:
         sparsity = masked_net.sparsity_fraction(threshold_eval)
         print(f"step={step} loss={loss_val:.6f} bc_loss={metrics['bc_loss']:.6f} "
-              f"sparsity_penalty={metrics['sparsity_penalty']:.6f} sparsity@{threshold_eval}={sparsity:.3f}")
+              f"sparsity_loss={metrics['sparsity_loss']:.6f} sparsity@{threshold_eval}={sparsity:.3f}")
+        
+        # early stopping
+        if sparsity < 0.1 and metrics['bc_loss'] < 0.01:
+            break
 
 # ---------------------------
 # (5) Extract circuit
