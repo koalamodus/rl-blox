@@ -45,7 +45,6 @@ print(f"Replay buffer length: {len(actions)}")
 class MaskedMLP(nnx.Module):
     """Masked wrapper for a pretrained MLP for circuit discovery."""
     
-    # TODO: use jax random seed
     def __init__(self, base_mlp: MLP, rngs: nnx.Rngs, init_bias_logit=0.9, init_std=0.01, mask_bias=False):
         self.base = base_mlp
         self.mask_bias = mask_bias
@@ -147,28 +146,21 @@ class MaskedMLP(nnx.Module):
         """Return fraction of weights kept (kernels only by default)."""
 
         def count_masks(mask_params):
-            kept, total = 0, 0
-            for mask_param in mask_params.values():
-                mask = jax.nn.sigmoid(mask_param.value)
-                hard = (mask >= threshold).astype(jnp.int32)
-                total += hard.size
-                kept += int(hard.sum())
+            masks = jnp.array([jax.nn.sigmoid(mask.value) for mask in mask_params.values()])
+            hard = (masks >= threshold).astype(jnp.int32)
+            kept = jnp.sum(hard)
+            total = jnp.sum(jnp.array([mask.value.size for mask in mask_params.values()]))
             return kept, total
 
-        kept, total = 0, 0
-
         # hidden layers
-        for layer_masks in self.masks["hidden_layers"].values():
-            k, t = count_masks(layer_masks)
-            kept += k
-            total += t
+        hidden_kept_total = jnp.array([count_masks(layer_masks) for layer_masks in self.masks["hidden_layers"].values()])
+        output_kept, output_total = count_masks(self.masks["output_layer"])
 
-        # output layer
-        k, t = count_masks(self.masks["output_layer"])
-        kept += k
-        total += t
+        # combine all counts
+        all_kept = jnp.sum(hidden_kept_total[:, 0]) + output_kept
+        all_total = jnp.sum(hidden_kept_total[:, 1]) + output_total
 
-        return kept / max(1, total)
+        return all_kept / jnp.maximum(1, all_total)
 
 # Instantiate masked network
 masked_net = MaskedMLP(q, nnx.Rngs(seed+2))
@@ -179,18 +171,22 @@ masked_net = MaskedMLP(q, nnx.Rngs(seed+2))
 # ---------------------------
 def soft_mask_sparsity(masks: dict) -> jnp.ndarray:
     """Compute total sparsity penalty over all mask logits."""
-    sparsity = 0.0
 
     # hidden layers
-    for layer_masks in masks.get("hidden_layers", {}).values():
-        for param_mask in layer_masks.values():  # kernel / bias
-            sparsity += jnp.sum(jax.nn.sigmoid(param_mask.value))
+    hidden_sums = jnp.array([
+        jnp.sum(jax.nn.sigmoid(param_mask.value))
+        for layer_masks in masks.get("hidden_layers", {}).values()
+        for param_mask in layer_masks.values()
+    ])
 
     # output layer
-    for param_mask in masks.get("output_layer", {}).values():
-        sparsity += jnp.sum(jax.nn.sigmoid(param_mask.value))
+    output_sums = jnp.array([
+        jnp.sum(jax.nn.sigmoid(param_mask.value))
+        for param_mask in masks.get("output_layer", {}).values()
+    ])
 
-    return sparsity
+    # combine all sums
+    return jnp.sum(hidden_sums) + jnp.sum(output_sums)
 
 def bc_loss(masked_net, batch):
     """
@@ -252,8 +248,8 @@ def sparsity_schedule(step, lambda_start, lambda_end, warmup_steps, total_steps)
 
 key = jr.PRNGKey(seed + 123)
 for step in tqdm(range(1, num_steps + 1), desc="Training"):
-    key, sk = jr.split(key)
-    batch = sample_batch(rb, batch_size, key=sk)
+    key, subkey = jr.split(key)
+    batch = sample_batch(rb, batch_size, key=subkey)
     lam = sparsity_schedule(step, lambda_start, lambda_end, warmup_steps, num_steps)
     (loss_val, metrics), grads = nnx.value_and_grad(subnetwork_loss, has_aux=True)(masked_net, batch, lam)
     optimizer.update(masked_net, grads)
