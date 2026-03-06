@@ -222,6 +222,7 @@ def subnetwork_loss(masked_net, batch, sparsity_lambda=1e-3):
 # ---------------------------
 # (4) Training loop
 # ---------------------------
+from functools import partial
 from tqdm import tqdm
 
 batch_size = 128
@@ -246,13 +247,25 @@ def sparsity_schedule(step, lambda_start, lambda_end, warmup_steps, total_steps)
     progress = (step - warmup_steps) / max(1, total_steps - warmup_steps)
     return float(lambda_start + progress * (lambda_end - lambda_start))
 
+def train_step_with_loss(
+    loss, optimizer: nnx.Optimizer, net: nnx.Module, *args, **kwargs
+) -> tuple[float, float]:
+    """Performs a single training step to optimize a network."""
+    grad_fn = nnx.value_and_grad(loss, argnums=0, has_aux=True)
+    value, grad = grad_fn(net, *args, **kwargs)
+    optimizer.update(net, grad)
+    return value
+
+train_step = partial(train_step_with_loss, subnetwork_loss)
+train_step = partial(nnx.jit, static_argnames=("gamma",))(train_step)
+
 key = jr.PRNGKey(seed + 123)
 for step in tqdm(range(1, num_steps + 1), desc="Training"):
     key, subkey = jr.split(key)
     batch = sample_batch(rb, batch_size, key=subkey)
     lam = sparsity_schedule(step, lambda_start, lambda_end, warmup_steps, num_steps)
-    (loss_val, metrics), grads = nnx.value_and_grad(subnetwork_loss, has_aux=True)(masked_net, batch, lam)
-    optimizer.update(masked_net, grads)
+
+    loss_val, metrics = train_step(optimizer, masked_net, batch, lam)
 
     if step % 1000 == 0:
         sparsity = masked_net.sparsity_fraction(threshold_eval)
