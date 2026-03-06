@@ -71,7 +71,6 @@ class MaskedMLP(nnx.Module):
         # output layer
         self.masks["output_layer"] = create_masks(base_state["output_layer"])
     
-    # TODO: change soft mask to hard mask in forward loop, use straight-through-estimator
     def _masked_state(self):
         """Return a masked copy of base network parameters."""
         base_state = nnx.state(self.base)
@@ -81,7 +80,11 @@ class MaskedMLP(nnx.Module):
             out = {}
             for param_name, param_value in layer_params.items():
                 if param_name in mask_params:
-                    mask = jax.nn.sigmoid(mask_params[param_name].value)
+                    mask_soft = jax.nn.sigmoid(mask_params[param_name].value)
+                    mask_hard = (mask_soft >= 0.5).astype(param_value.value.dtype)
+                    # Straight-through gradient: the mask is soft mask in backprop and hard mask in forward
+                    mask = mask_soft + jax.lax.stop_gradient(mask_hard - mask_soft)
+
                     out[param_name] = nnx.Param(param_value.value * mask)
                 else:
                     out[param_name] = param_value
