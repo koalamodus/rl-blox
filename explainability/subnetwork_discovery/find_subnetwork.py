@@ -48,7 +48,7 @@ class MaskedMLP(nnx.Module):
     def __init__(self, base_mlp: MLP, rngs: nnx.Rngs, init_bias_logit=0.9, init_std=0.01, mask_bias=False):
         self.base = base_mlp
         self.mask_bias = mask_bias
-        base_state = nnx.state(self.base)
+        graphdef, base_state = nnx.split(self.base)
 
         self.masks = {}
 
@@ -70,6 +70,8 @@ class MaskedMLP(nnx.Module):
 
         # output layer
         self.masks["output_layer"] = create_masks(base_state["output_layer"])
+
+        self.masked_mlp = nnx.merge(graphdef, self._masked_state(), copy=True)
     
     def _masked_state(self):
         """Return a masked copy of base network parameters."""
@@ -85,9 +87,9 @@ class MaskedMLP(nnx.Module):
                     # Straight-through gradient: the mask is soft mask in backprop and hard mask in forward
                     mask = mask_soft + jax.lax.stop_gradient(mask_hard - mask_soft)
 
-                    out[param_name] = nnx.Param(param_value.value * mask)
+                    out[param_name] = jax.lax.stop_gradient(param_value.value) * nnx.Param(mask)
                 else:
-                    out[param_name] = param_value
+                    out[param_name] = jax.lax.stop_gradient(param_value)
             return out
 
         # hidden layers
@@ -108,12 +110,10 @@ class MaskedMLP(nnx.Module):
         return nnx.state(masked_state)
 
     def __call__(self, x):
-        nnx.update(self.base, self._masked_state())
-        return self.base(x)
-
+        return self.masked_mlp(x)
     def hard_threshold_params(self, threshold=0.5):
         """Return pruned parameters with masks hard-thresholded."""
-        base_state = nnx.state(self.base)
+        graphdef, base_state = nnx.split(self.base)
         pruned_weights = {}
 
         def apply_threshold(layer_params, mask_params):
@@ -123,9 +123,9 @@ class MaskedMLP(nnx.Module):
                     mask = (
                         jax.nn.sigmoid(mask_params[param_name].value) >= threshold
                     ).astype(param_value.value.dtype)
-                    out[param_name] = nnx.Param(param_value.value * mask)
+                    out[param_name] =  jax.lax.stop_gradient(param_value.value) * nnx.Param(mask)
                 else:
-                    out[param_name] = param_value
+                    out[param_name] = jax.lax.stop_gradient(param_value)
             return out
 
         # hidden layers
@@ -142,8 +142,7 @@ class MaskedMLP(nnx.Module):
             base_state["output_layer"],
             self.masks["output_layer"],
         )
-
-        return pruned_weights
+        self.pruned_mlp = nnx.merge(graphdef, self._masked_state(), copy=True)
     
     def sparsity_fraction(self, threshold=0.5):
         """Return fraction of weights kept (kernels only by default)."""
@@ -280,13 +279,12 @@ for step in tqdm(range(1, num_steps + 1), desc="Training"):
             break
 
 # ---------------------------
-# (5) Extract circuit
+# (5) Extract subnetwork
 # ---------------------------
-pruned_params = masked_net.hard_threshold_params(threshold_eval)
+masked_net.hard_threshold_params(threshold_eval)
 
 # create a pruned MLP for evaluation
-q_pruned = MLP(env.observation_space.shape[0], int(env.action_space.n), rngs=nnx.Rngs(seed+999), **hparams_model)
-nnx.update(q_pruned, pruned_params)
+q_pruned = masked_net.pruned_mlp
 print(f"Pruned network ready, fraction of weights kept: {masked_net.sparsity_fraction(threshold_eval):.3f}")
 
 # save pruned network
