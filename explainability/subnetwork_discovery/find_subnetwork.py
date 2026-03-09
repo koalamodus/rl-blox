@@ -190,33 +190,18 @@ def soft_mask_sparsity(masks: dict) -> jnp.ndarray:
     # combine all sums
     return jnp.sum(hidden_sums) + jnp.sum(output_sums)
 
-def bc_loss(masked_net, batch):
-    """
-    Behavior cloning loss
-    Args:
-        masked_net: MaskedMLP instance
-        batch: dict with 'obs' and 'act' arrays
-        lam: sparsity regularization coefficient
-    """
-    # Forward pass
-    logits = masked_net(batch['obs'])  # shape [batch, n_actions]
+def q_diff_loss(q_values_diff):
+    # Loss = mean squared difference between original Q and masked Q
+    return jnp.mean((q_values_diff) ** 2)
 
-    # Action log-probs
-    log_probs = jax.nn.log_softmax(logits)
-    act_indices = batch['act'][:, None]
-    selected_log_probs = jnp.take_along_axis(log_probs, act_indices, axis=1).squeeze(1)
-
-    bc_loss_val = -jnp.mean(selected_log_probs)
-    return bc_loss_val
-
-def subnetwork_loss(masked_net, batch, sparsity_lambda=1e-3):
-    bc_loss_val = bc_loss(masked_net, batch)
+def subnetwork_loss(masked_net, q_values_diff, sparsity_lambda=1e-3):
+    q_diff_loss_val = q_diff_loss(q_values_diff)
 
     sparsity_loss = sparsity_lambda * soft_mask_sparsity(masked_net.masks)
-    total_loss = bc_loss_val + sparsity_loss
+    total_loss = q_diff_loss_val + sparsity_loss
 
     metrics = {
-        'bc_loss': bc_loss_val,
+        'q_diff_loss': q_diff_loss_val,
         'sparsity_loss': sparsity_loss
     }
     return total_loss, metrics
@@ -236,6 +221,7 @@ lr = 3e-4
 
 optimizer = nnx.Optimizer(masked_net, optax.adam(lr), wrt=nnx.Param)
 
+# TODO: remove replay buffer, sample directly from state
 def sample_batch(rb, batch_size=128, key=jr.PRNGKey(0)):
     N = rb.buffer['observation'].shape[0]
     idx = jr.randint(key, (batch_size,), minval=0, maxval=N)
@@ -267,15 +253,21 @@ for step in tqdm(range(1, num_steps + 1), desc="Training"):
     batch = sample_batch(rb, batch_size, key=subkey)
     lam = sparsity_schedule(step, lambda_start, lambda_end, warmup_steps, num_steps)
 
-    loss_val, metrics = train_step(optimizer, masked_net, batch, lam)
+    q_values_diff = masked_net.masked_mlp(batch['obs']) - q(batch['obs'])
+
+    loss_val, metrics = train_step(optimizer, masked_net, q_values_diff, lam)
+    # (loss_val, metrics), grads = nnx.value_and_grad(subnetwork_loss, has_aux=True)(masked_net, batch, lam)
+    # optimizer.update(masked_net, grads)
+
+   
 
     if step % 1000 == 0:
         sparsity = masked_net.sparsity_fraction(threshold_eval)
-        print(f"step={step} loss={loss_val:.6f} bc_loss={metrics['bc_loss']:.6f} "
+        print(f"step={step} loss={loss_val:.6f} q_diff_loss={metrics['q_diff_loss']:.6f} "
               f"sparsity_loss={metrics['sparsity_loss']:.6f} sparsity@{threshold_eval}={sparsity:.3f}")
         
         # early stopping
-        if sparsity < 0.1 and metrics['bc_loss'] < 0.01:
+        if sparsity < 0.1 and metrics['q_diff_loss'] < 0.01:
             break
 
 # ---------------------------
