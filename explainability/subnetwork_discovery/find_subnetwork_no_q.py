@@ -11,7 +11,7 @@ import chex
 # ---------------------------
 # (1) Load trained network and replay buffer
 # ---------------------------
-env_name = "CartPole-v1"
+env_name = "MountainCar-v0"
 env = gym.make(env_name)
 seed = 42
 
@@ -219,10 +219,16 @@ lr = 3e-4
 optimizer = nnx.Optimizer(masked_net, optax.adam(lr), wrt=nnx.Param)
 # optimizer = nnx.Optimizer(masked_net.mask_logits, optax.adam(lr), wrt=nnx.Param)
 
-def sample_state(n_features, batch_size=128, key=jr.PRNGKey(0)):
-    state = jax.random.uniform(key, (batch_size, n_features))
-    return state
+def sample_state(env, batch_size, key):
+    low = jnp.array(env.observation_space.low)
+    high = jnp.array(env.observation_space.high)
 
+    return jax.random.uniform(
+        key,
+        shape=(batch_size, low.shape[0]),
+        minval=low,
+        maxval=high,
+    )
 def sparsity_schedule(step, lambda_start, lambda_end, warmup_steps, total_steps):
     if step < warmup_steps:
         return lambda_start
@@ -244,7 +250,7 @@ train_step = partial(nnx.jit, static_argnames=("lam",))(train_step)
 key = jr.PRNGKey(seed + 123)
 for step in tqdm(range(1, num_steps + 1), desc="Training"):
     key, subkey = jr.split(key)
-    state = sample_state(q.hidden_layers[0].in_features, batch_size, key=subkey)
+    state = sample_state(env, batch_size, key=subkey)
     lam = sparsity_schedule(step, lambda_start, lambda_end, warmup_steps, num_steps)
 
     # q_values_diff = masked_net(batch['obs']) - q(batch['obs'])
