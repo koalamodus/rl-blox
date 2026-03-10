@@ -12,7 +12,7 @@ from rl_blox.logging.logger import AIMLogger
 
 # 1. train a network with ddqn example 
 # Set up environment
-env_name = "CartPole-v1"
+env_name = "MountainCar-v0"
 env = gym.make(env_name)
 seed = 42
 env = gym.wrappers.RecordEpisodeStatistics(env)
@@ -53,7 +53,7 @@ optimizer = nnx.Optimizer(
 )
 
 # Train
-q, _, _ = train_ddqn(
+result_dict = train_ddqn(
     q_net,
     env,
     rb,
@@ -61,6 +61,8 @@ q, _, _ = train_ddqn(
     **hparams_algorithm,
     logger=logger,
 )
+q = result_dict.q_net
+
 env.close()
 
 # Save trained policy
