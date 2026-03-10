@@ -1,55 +1,85 @@
-from flax import nnx
-from rl_blox.blox.function_approximator.mlp import MLP
-import jax.numpy as jnp
-import jax
-import jax.random as jr
-import optax
-import gymnasium as gym
-import pickle
+import os
+from minigrid.core.constants import COLOR_NAMES, COLOR_TO_IDX
+from minigrid_envs import make_ocean_env
 
+import jax
+import flax.nnx as nnx
+import jax.numpy as jnp
+
+seed = 10  # random seed for np and jax
+key = jax.random.PRNGKey(seed)
 # ---------------------------
-# (1) Load trained network and replay buffer
+# (1) Load trained network
 # ---------------------------
-env_name = "MountainCar-v0"
-env = gym.make(env_name)
-seed = 42
+
+import orbax.checkpoint as ocp
+from rl_blox.blox.function_approximator.mlp import MLP
+
+# Used to map colors to integers
+# COLOR_TO_IDX = {"red": 0, "green": 1, "blue": 2, "purple": 3, "yellow": 4, "grey": 5}
+subtask = "red" # "red", "green", "blue", "purple", "yellow", "grey"
+env = make_ocean_env(color = subtask)
 
 # Recreate MLP with same architecture as training
 hparams_model = dict(
+    n_features=env.observation_space.shape[0],
+    n_outputs=int(env.action_space.n),
     activation="relu",
-    hidden_nodes=[128, 128],
+    hidden_nodes=[512, 512],
+    rngs=nnx.Rngs(seed)
 )
 
-q = MLP(env.observation_space.shape[0], int(env.action_space.n), rngs=nnx.Rngs(seed), **hparams_model)
+abstract_mlp = MLP(**hparams_model)
+graphdef, abstract_state = nnx.split(abstract_mlp)
 
-# Load trained MLP parameters
-with open("ddqn_model_ckpt.pkl", "rb") as f:
-    mlp_state = pickle.load(f)
-nnx.update(q, mlp_state)
-print("Loaded trained MLP parameters successfully")
+def get_policy_from_q_net(q):
 
-def evaluate_policy(env_name, q_net, num_episodes=10, render_mode="None"):
-    eval_env = gym.make(env_name, render_mode=render_mode)
-    total_reward = 0.0
+    def policy(obs):
+        return int(jnp.argmax(q([obs])))
 
-    for _ in range(num_episodes):
-        obs, _ = eval_env.reset()
-        terminated = False
-        truncated = False
-        episode_reward = 0.0
+    return policy
 
-        while not (terminated or truncated):
-            action = int(jnp.argmax(q_net(jnp.array([obs]))))
-            obs, reward, terminated, truncated, info = eval_env.step(action)
-            episode_reward += reward
 
-        total_reward += episode_reward
 
-    avg_reward = total_reward / num_episodes
-    print(f"Average reward over {num_episodes} episodes: {avg_reward}")
-    eval_env.close()
+train_mask = True
+save_final_mask = train_mask
+load_final_mask = not train_mask
 
-evaluate_policy(env_name, q)
+
+benchmark, grid_size = "oceans", "medium"
+model_seed = 3
+ckpt_name = "minigrid_oceans_medium_DDQN-UTS_1769513294.4912446_q_step_001930001_epoch_502057"
+ckpt_path = os.path.expanduser(
+    f"~/workspace/XRL/ocean_trained_model/{benchmark}_{grid_size}/uts/seed_{model_seed}/{ckpt_name}"
+)
+print(ckpt_path)
+
+# restore q net from checkpoint
+full_path = os.path.abspath(ckpt_path)
+print(f"ckpts: {full_path}")
+checkpointer = ocp.StandardCheckpointer()
+restored_model = checkpointer.restore(full_path, abstract_state)
+q = nnx.merge(graphdef, restored_model)
+
+policy = get_policy_from_q_net(q)
+
+
+from eval_helper import eval_policy
+def evaluate_policy_on_task(policy, task="all", render_mode = "human"):
+    if task == "all":
+        task = COLOR_NAMES
+    else:
+        task = task if isinstance(task, list) else [task]
+    
+    for color in task:
+        assert color in COLOR_NAMES
+
+        eval_env = make_ocean_env(color, render_mode)
+        _ = eval_policy(color, eval_env, policy, verbose=True, num_episode=1)
+        eval_env.close()
+
+print("evaluate original q network")
+evaluate_policy_on_task(policy, render_mode="None")
 
 # ---------------------------
 # (2) Define masked network
@@ -191,26 +221,53 @@ def subnetwork_loss(masked_net: MaskedMLP, q_net: MLP, state, sparsity_lambda=1e
 # ---------------------------
 from functools import partial
 from tqdm import tqdm
+import optax
+import jax.random as jr
 
 batch_size = 128
 num_steps = 50_000
-lambda_start, lambda_end = 1e-6, 1e-6
+lambda_start, lambda_end = 1e-8, 1e-8
 warmup_steps = 3_000
 threshold_eval = 0.5
-lr = 3e-4
+lr = 1e-4
 
 optimizer = nnx.Optimizer(masked_net, optax.adam(lr), wrt=nnx.Param)
 
-def sample_state(env, batch_size, key):
+def sample_state(env, subtask, batch_size, key):
+    # Get the observation space bounds
     low = jnp.array(env.observation_space.low)
     high = jnp.array(env.observation_space.high)
 
-    return jax.random.uniform(
+    # low and high are currently 0 and 255, but in env it is 0 and 6
+
+    # Sample a batch of states uniformly
+    state = jax.random.randint(
         key,
         shape=(batch_size, low.shape[0]),
-        minval=low,
-        maxval=high,
+        minval=0,
+        maxval=6,
     )
+    # jax.debug.print("state={state}", state=state)
+
+    # Get the context index
+    try:
+        context = COLOR_TO_IDX[subtask]
+    except KeyError:
+        raise RuntimeError(f"Unknown subtask: {subtask}")
+
+    # One-hot context
+    one_hot_length = 6
+    one_hot_context = jnp.zeros(one_hot_length)
+    one_hot_context = one_hot_context.at[context].set(1)  # JAX-friendly
+
+    # Broadcast the one-hot context to the batch
+    # Replace the last 6 elements of every row in `state`
+    state = state.at[:, -one_hot_length:].set(one_hot_context)
+    # jax.debug.print("state={state}", state=state)
+    # jax.debug.print("-------------")
+
+    return state
+
 def sparsity_schedule(step, lambda_start, lambda_end, warmup_steps, total_steps):
     if step < warmup_steps:
         return lambda_start
@@ -232,7 +289,7 @@ train_step = partial(nnx.jit, static_argnames=("lam",))(train_step)
 key = jr.PRNGKey(seed + 123)
 for step in tqdm(range(1, num_steps + 1), desc="Training"):
     key, subkey = jr.split(key)
-    state = sample_state(env, batch_size, key=subkey)
+    state = sample_state(env, subtask, batch_size, key=subkey)
     lam = sparsity_schedule(step, lambda_start, lambda_end, warmup_steps, num_steps)
    
     loss_val, metrics = train_step(optimizer, masked_net, q, state, lam)
@@ -243,7 +300,7 @@ for step in tqdm(range(1, num_steps + 1), desc="Training"):
               f"sparsity_loss={metrics['sparsity_loss']:.6f} sparsity@{threshold_eval}={sparsity:.3f}")
         
         # early stopping
-        if sparsity < 0.15 and metrics['q_diff_loss'] < 0.01:
+        if sparsity < 0.15 and metrics['q_diff_loss'] < 1e-5:
             break
 
 # ---------------------------
@@ -281,12 +338,7 @@ print(f"Pruned network ready, fraction of weights kept: {sparsity_fraction(maske
 pruned_weights = hard_threshold_params(masked_net, threshold_eval)
 # print(f"pruned_weights: {pruned_weights}")
 
-q_pruned = MLP(
-    env.observation_space.shape[0],
-    int(env.action_space.n),
-    rngs=nnx.Rngs(seed),
-    **hparams_model
-)
+q_pruned = MLP(**hparams_model)
 
 # For hidden layers: convert list of dicts to dict of dicts keyed by index (optional)
 hidden_layers_dict = {i: layer for i, layer in enumerate(pruned_weights["hidden_layers"])}
@@ -310,4 +362,5 @@ subnetwork_state = nnx.state(q_pruned)
 # print("Saved subnetwork checkpoint.")
 
 # Evaluate the subnetwork policy
-evaluate_policy(env_name, q_pruned, render_mode="human")
+subnet_policy = get_policy_from_q_net(q_pruned)
+evaluate_policy_on_task(subnet_policy, task=subtask, render_mode="human")
