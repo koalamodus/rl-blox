@@ -29,6 +29,28 @@ with open("ddqn_model_ckpt.pkl", "rb") as f:
 nnx.update(q, mlp_state)
 print("Loaded trained MLP parameters successfully")
 
+def evaluate_policy(env_name, q_net, num_episodes=10, render_mode="None"):
+    eval_env = gym.make(env_name, render_mode=render_mode)
+    total_reward = 0.0
+
+    for _ in range(num_episodes):
+        obs, _ = eval_env.reset()
+        terminated = False
+        truncated = False
+        episode_reward = 0.0
+
+        while not (terminated or truncated):
+            action = int(jnp.argmax(q_net(jnp.array([obs]))))
+            obs, reward, terminated, truncated, info = eval_env.step(action)
+            episode_reward += reward
+
+        total_reward += episode_reward
+
+    avg_reward = total_reward / num_episodes
+    print(f"Average reward over {num_episodes} episodes: {avg_reward}")
+    eval_env.close()
+
+evaluate_policy(env_name, q)
 
 # ---------------------------
 # (2) Define masked network
@@ -274,7 +296,7 @@ for step in tqdm(range(1, num_steps + 1), desc="Training"):
               f"sparsity_loss={metrics['sparsity_loss']:.6f} sparsity@{threshold_eval}={sparsity:.3f}")
         
         # early stopping
-        if sparsity < 0.5 and metrics['q_diff_loss'] < 0.01:
+        if sparsity < 0.15 and metrics['q_diff_loss'] < 0.01:
             print("original q-net")
             print(nnx.state(q))
             # jax.debug.print("q_out = {q_out}, masknet_out = {masknet_out}",
@@ -352,15 +374,5 @@ print(f"subnetwork_state is {subnetwork_state}")
 #     pickle.dump(subnetwork_state, f)
 # print("Saved subnetwork checkpoint.")
 
-# Show the subnetwork policy
-eval_env = gym.make(env_name, render_mode="human")
-obs, _ = eval_env.reset()
-
-while True:
-    action = int(jnp.argmax(q_pruned([obs])))
-    next_obs, reward, terminated, truncated, info = eval_env.step(action)
-
-    if terminated or truncated:
-        obs, _ = eval_env.reset()
-    else:
-        obs = next_obs
+# Evaluate the subnetwork policy
+evaluate_policy(env_name, q_pruned, render_mode="human")
