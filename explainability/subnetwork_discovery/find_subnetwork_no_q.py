@@ -29,15 +29,6 @@ with open("ddqn_model_ckpt.pkl", "rb") as f:
 nnx.update(q, mlp_state)
 print("Loaded trained MLP parameters successfully")
 
-# Load replay buffer (for behavior cloning dataset)
-with open("rb_ckpt.pkl", "rb") as f:
-    rb = pickle.load(f)
-states = jnp.array(rb.buffer['observation'])
-actions = jnp.array(rb.buffer['action']).astype(jnp.int32)
-
-chex.assert_equal_shape_prefix((states, actions), prefix_len=1)
-print(f"Replay buffer length: {len(actions)}")
-
 
 # ---------------------------
 # (2) Define masked network
@@ -180,18 +171,18 @@ def soft_mask_sparsity(masks: dict) -> jnp.ndarray:
 #     }
 #     return total_loss, metrics
 
-def q_diff_loss(masked_net: MaskedMLP, q_net: MLP, batch):
+def q_diff_loss(masked_net: MaskedMLP, q_net: MLP, state):
     """
     Loss is the mean squared difference between original Q and masked Q
     """
-    q_masked = masked_net(batch['obs'])
-    q_original = q_net(batch['obs'])
+    q_masked = masked_net(state)
+    q_original = q_net(state)
     q_values_diff = q_masked - jax.lax.stop_gradient(q_original)
 
     q_diff_loss_val = jnp.mean(q_values_diff ** 2)
     return q_diff_loss_val
 
-def subnetwork_loss(masked_net: MaskedMLP, q_net: MLP, batch, sparsity_lambda=1e-3):
+def subnetwork_loss(masked_net: MaskedMLP, q_net: MLP, state, sparsity_lambda=1e-3):
     """
     Compute the loss for a masked subnetwork compared to a frozen Q-network.
 
@@ -201,7 +192,7 @@ def subnetwork_loss(masked_net: MaskedMLP, q_net: MLP, batch, sparsity_lambda=1e
         batch: Dict with keys 'obs' and 'act'
         sparsity_lambda: Weight for mask sparsity regularization
     """
-    q_diff_loss_val = q_diff_loss(masked_net, q_net, batch)
+    q_diff_loss_val = q_diff_loss(masked_net, q_net, state)
     sparsity_loss = sparsity_lambda * soft_mask_sparsity(masked_net.mask_logits)
     total_loss = q_diff_loss_val + sparsity_loss
 
@@ -228,13 +219,9 @@ lr = 3e-4
 optimizer = nnx.Optimizer(masked_net, optax.adam(lr), wrt=nnx.Param)
 # optimizer = nnx.Optimizer(masked_net.mask_logits, optax.adam(lr), wrt=nnx.Param)
 
-# TODO: remove replay buffer, sample directly from state
-def sample_batch(rb, batch_size=128, key=jr.PRNGKey(0)):
-    N = rb.buffer['observation'].shape[0]
-    idx = jr.randint(key, (batch_size,), minval=0, maxval=N)
-    obs = jnp.array(rb.buffer['observation'])[idx]
-    act = jnp.array(rb.buffer['action'])[idx].astype(jnp.int32)
-    return {'obs': obs, 'act': act}
+def sample_state(n_features, batch_size=128, key=jr.PRNGKey(0)):
+    state = jax.random.uniform(key, (batch_size, n_features))
+    return state
 
 def sparsity_schedule(step, lambda_start, lambda_end, warmup_steps, total_steps):
     if step < warmup_steps:
@@ -252,12 +239,12 @@ def train_step_with_loss(
     return value
 
 train_step = partial(train_step_with_loss, subnetwork_loss)
-train_step = partial(nnx.jit, static_argnames=("gamma",))(train_step)
+train_step = partial(nnx.jit, static_argnames=("lam",))(train_step)
 
 key = jr.PRNGKey(seed + 123)
 for step in tqdm(range(1, num_steps + 1), desc="Training"):
     key, subkey = jr.split(key)
-    batch = sample_batch(rb, batch_size, key=subkey)
+    state = sample_state(q.hidden_layers[0].in_features, batch_size, key=subkey)
     lam = sparsity_schedule(step, lambda_start, lambda_end, warmup_steps, num_steps)
 
     # q_values_diff = masked_net(batch['obs']) - q(batch['obs'])
@@ -273,7 +260,7 @@ for step in tqdm(range(1, num_steps + 1), desc="Training"):
     # # optimizer.update(masked_net, grads)
 
    
-    loss_val, metrics = train_step(optimizer, masked_net, q, batch, lam)
+    loss_val, metrics = train_step(optimizer, masked_net, q, state, lam)
 
     if step % 100 == 0:
         sparsity = sparsity_fraction(masked_net, threshold_eval)
@@ -281,7 +268,7 @@ for step in tqdm(range(1, num_steps + 1), desc="Training"):
               f"sparsity_loss={metrics['sparsity_loss']:.6f} sparsity@{threshold_eval}={sparsity:.3f}")
         
         # early stopping
-        if sparsity < 0.5: #and metrics['q_diff_loss'] < 0.01:
+        if sparsity < 0.5 and metrics['q_diff_loss'] < 0.01:
             print("original q-net")
             print(nnx.state(q))
             # jax.debug.print("q_out = {q_out}, masknet_out = {masknet_out}",
