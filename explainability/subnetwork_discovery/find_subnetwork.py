@@ -48,7 +48,7 @@ class MaskedMLP(nnx.Module):
     def __init__(self, base_mlp: MLP, rngs: nnx.Rngs, init_bias_logit=0.9, init_std=0.01, mask_bias=False):
         self.base = base_mlp
         self.mask_bias = mask_bias
-        graphdef, base_state = nnx.split(self.base)
+        _, base_state = nnx.split(self.base)
 
         self.masks = {}
 
@@ -71,11 +71,11 @@ class MaskedMLP(nnx.Module):
         # output layer
         self.masks["output_layer"] = create_masks(base_state["output_layer"])
 
-        self.masked_mlp = nnx.merge(graphdef, self._masked_state(), copy=True)
+        self.masked_mlp = self._masked_state()
     
     def _masked_state(self):
         """Return a masked copy of base network parameters."""
-        base_state = nnx.state(self.base)
+        graphdef, base_state = nnx.split(self.base)
         masked_state = {}
 
         def apply_masks(layer_params, mask_params):
@@ -107,9 +107,12 @@ class MaskedMLP(nnx.Module):
             self.masks["output_layer"],
         )
 
-        return nnx.state(masked_state)
+        masked_mlp = nnx.merge(graphdef, nnx.state(masked_state), copy=True)
+
+        return masked_mlp
 
     def __call__(self, x):
+        self.masked_mlp = self._masked_state()
         return self.masked_mlp(x)
     def hard_threshold_params(self, threshold=0.5):
         """Return pruned parameters with masks hard-thresholded."""
@@ -123,9 +126,9 @@ class MaskedMLP(nnx.Module):
                     mask = (
                         jax.nn.sigmoid(mask_params[param_name].value) >= threshold
                     ).astype(param_value.value.dtype)
-                    out[param_name] =  jax.lax.stop_gradient(param_value.value) * nnx.Param(mask)
+                    out[param_name] = nnx.Param(jax.lax.stop_gradient(param_value.value) * mask)
                 else:
-                    out[param_name] = jax.lax.stop_gradient(param_value)
+                    out[param_name] = jax.lax.stop_gradient(param_value.value)
             return out
 
         # hidden layers
@@ -142,7 +145,7 @@ class MaskedMLP(nnx.Module):
             base_state["output_layer"],
             self.masks["output_layer"],
         )
-        self.pruned_mlp = nnx.merge(graphdef, self._masked_state(), copy=True)
+        self.pruned_mlp = nnx.merge(graphdef, nnx.state(pruned_weights), copy=True)
     
     def sparsity_fraction(self, threshold=0.5):
         """Return fraction of weights kept (kernels only by default)."""
@@ -200,6 +203,9 @@ def subnetwork_loss(masked_net, q_values_diff, sparsity_lambda=1e-3):
     sparsity_loss = sparsity_lambda * soft_mask_sparsity(masked_net.masks)
     total_loss = q_diff_loss_val + sparsity_loss
 
+    # jax.debug.print("total_loss = {z}, q_diff_loss_val = {x}, sparsity_loss = {y}",
+    #                  x=q_diff_loss_val, y=sparsity_loss, z=total_loss)
+
     metrics = {
         'q_diff_loss': q_diff_loss_val,
         'sparsity_loss': sparsity_loss
@@ -253,7 +259,7 @@ for step in tqdm(range(1, num_steps + 1), desc="Training"):
     batch = sample_batch(rb, batch_size, key=subkey)
     lam = sparsity_schedule(step, lambda_start, lambda_end, warmup_steps, num_steps)
 
-    q_values_diff = masked_net.masked_mlp(batch['obs']) - q(batch['obs'])
+    q_values_diff = masked_net(batch['obs']) - q(batch['obs'])
 
     loss_val, metrics = train_step(optimizer, masked_net, q_values_diff, lam)
     # (loss_val, metrics), grads = nnx.value_and_grad(subnetwork_loss, has_aux=True)(masked_net, batch, lam)
@@ -268,6 +274,11 @@ for step in tqdm(range(1, num_steps + 1), desc="Training"):
         
         # early stopping
         if sparsity < 0.1 and metrics['q_diff_loss'] < 0.01:
+            # print("original q-net")
+            # print(nnx.state(q))
+            jax.debug.print("q_out = {q_out}, masknet_out = {masknet_out}",
+                    q_out=q.output_layer.kernel.value, masknet_out=masked_net.masked_mlp.output_layer.kernel.value)
+            # jax.debug.print("mask = {mask}", mask=masked_net.masks)
             break
 
 # ---------------------------
