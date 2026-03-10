@@ -6,7 +6,6 @@ import jax.random as jr
 import optax
 import gymnasium as gym
 import pickle
-import chex
 
 # ---------------------------
 # (1) Load trained network and replay buffer
@@ -112,9 +111,8 @@ masked_net = MaskedMLP(frozen_params, nnx.Rngs(seed+2))
 # nnx.display(masked_net)
 
 # ---------------------------
-# (3) Behavior cloning loss for circuit discovery
+# (3) Subnetwork loss and sparsity computation
 # ---------------------------
-
 def sparsity_fraction(masked_net: MaskedMLP, threshold: float = 0.5) -> jnp.ndarray:
     """Compute fraction of weights masked (hard mask >= threshold) in a MaskedMLP."""
 
@@ -155,43 +153,6 @@ def soft_mask_sparsity(masks: dict) -> jnp.ndarray:
 
     # combine all sums
     return jnp.sum(hidden_sums) + jnp.sum(output_sums)
-
-# def soft_mask_sparsity(masks: dict) -> jnp.ndarray:
-#     """Compute total sparsity penalty over all mask logits."""
-
-#     hidden_terms = [
-#         jnp.sum(jax.nn.sigmoid(param_mask.value))
-#         for layer_masks in masks["hidden_layers"]
-#         for param_mask in layer_masks.values()
-#     ]
-
-#     output_terms = [
-#         jnp.sum(jax.nn.sigmoid(param_mask.value))
-#         for param_mask in masks["output_layer"].values()
-#     ]
-
-#     all_terms = hidden_terms + output_terms
-
-#     return jnp.sum(jnp.stack(all_terms))
-
-# def q_diff_loss(q_values_diff):
-#     # Loss = mean squared difference between original Q and masked Q
-#     return jnp.mean((q_values_diff) ** 2)
-
-# def subnetwork_loss(masked_net, q_values_diff, sparsity_lambda=1e-3):
-#     q_diff_loss_val = q_diff_loss(q_values_diff)
-
-#     sparsity_loss = sparsity_lambda * soft_mask_sparsity(masked_net.masks)
-#     total_loss = q_diff_loss_val + sparsity_loss
-
-#     # jax.debug.print("total_loss = {z}, q_diff_loss_val = {x}, sparsity_loss = {y}",
-#     #                  x=q_diff_loss_val, y=sparsity_loss, z=total_loss)
-
-#     metrics = {
-#         'q_diff_loss': q_diff_loss_val,
-#         'sparsity_loss': sparsity_loss
-#     }
-#     return total_loss, metrics
 
 def q_diff_loss(masked_net: MaskedMLP, q_net: MLP, state):
     """
@@ -239,7 +200,6 @@ threshold_eval = 0.5
 lr = 3e-4
 
 optimizer = nnx.Optimizer(masked_net, optax.adam(lr), wrt=nnx.Param)
-# optimizer = nnx.Optimizer(masked_net.mask_logits, optax.adam(lr), wrt=nnx.Param)
 
 def sample_state(env, batch_size, key):
     low = jnp.array(env.observation_space.low)
@@ -274,19 +234,6 @@ for step in tqdm(range(1, num_steps + 1), desc="Training"):
     key, subkey = jr.split(key)
     state = sample_state(env, batch_size, key=subkey)
     lam = sparsity_schedule(step, lambda_start, lambda_end, warmup_steps, num_steps)
-
-    # q_values_diff = masked_net(batch['obs']) - q(batch['obs'])
-    # # jax.debug.print("out_diff = {out_diff}",
-    # #                  out_diff=q.output_layer.kernel.value - masked_net.masked_mlp.output_layer.kernel.value)
-    # # q_values_diff = masked_net.masked_mlp(batch['obs']) - q(batch['obs'])
-    # # q_diff_loss_val = jnp.mean((q_values_diff) ** 2)
-    # # print(f"q_values_diff:{q_values_diff}")
-    # # print(f"q_diff_loss_val:{q_diff_loss_val}")
-
-    # loss_val, metrics = train_step(optimizer, masked_net, q_values_diff, lam)
-    # # (loss_val, metrics), grads = nnx.value_and_grad(subnetwork_loss, has_aux=True)(masked_net, batch, lam)
-    # # optimizer.update(masked_net, grads)
-
    
     loss_val, metrics = train_step(optimizer, masked_net, q, state, lam)
 
@@ -297,20 +244,11 @@ for step in tqdm(range(1, num_steps + 1), desc="Training"):
         
         # early stopping
         if sparsity < 0.15 and metrics['q_diff_loss'] < 0.01:
-            print("original q-net")
-            print(nnx.state(q))
-            # jax.debug.print("q_out = {q_out}, masknet_out = {masknet_out}",
-            #         q_out=q.output_layer.kernel.value, masknet_out=masked_net.masked_mlp.output_layer.kernel.value)
-            # jax.debug.print("mask = {mask}", mask=masked_net.masks)
             break
 
 # ---------------------------
 # (5) Extract subnetwork
 # ---------------------------
-
-import jax
-from flax import nnx
-
 def hard_threshold_params(masked_net, threshold=0.5):
     """
     Return a dict of frozen weights with masks hard-thresholded.
@@ -341,12 +279,12 @@ def hard_threshold_params(masked_net, threshold=0.5):
 
 print(f"Pruned network ready, fraction of weights kept: {sparsity_fraction(masked_net, threshold_eval):.3f}")
 pruned_weights = hard_threshold_params(masked_net, threshold_eval)
-print(f"pruned_weights: {pruned_weights}")
+# print(f"pruned_weights: {pruned_weights}")
 
 q_pruned = MLP(
     env.observation_space.shape[0],
     int(env.action_space.n),
-    rngs=nnx.Rngs(seed),  # any RNG; will be overwritten by pruned weights
+    rngs=nnx.Rngs(seed),
     **hparams_model
 )
 
@@ -362,12 +300,9 @@ pruned_state = {
 # Update the new MLP with pruned parameters
 nnx.update(q_pruned, pruned_state)
 
-# create a pruned MLP for evaluation
-# q_pruned = masked_net.pruned_mlp
-
 # save pruned network
 subnetwork_state = nnx.state(q_pruned)
-print(f"subnetwork_state is {subnetwork_state}")
+# print(f"subnetwork_state is {subnetwork_state}")
 
 
 # with open("ddqn_subnet_ckpt.pkl", "wb") as f:
