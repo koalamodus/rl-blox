@@ -258,11 +258,22 @@ def sample_state(env, subtask, batch_size, key):
     )
     # jax.debug.print("state={state}", state=state)
 
-    # Get the context index
-    try:
-        context = COLOR_TO_IDX[subtask]
-    except KeyError:
-        raise RuntimeError(f"Unknown subtask: {subtask}")
+    # # Sample only the subtask
+    # # Get the context index
+    # try:
+    #     context = COLOR_TO_IDX[subtask]
+    # except KeyError:
+    #     raise RuntimeError(f"Unknown subtask: {subtask}")
+    
+    # Sample all subtasks
+    key, subkey = jr.split(key)
+
+    context = jax.random.randint(
+        subkey,
+        shape=(batch_size, 1),
+        minval=0,
+        maxval=6,
+    )
 
     # One-hot context
     one_hot_length = 6
@@ -315,9 +326,6 @@ for step in tqdm(range(1, num_steps + 1), desc="Training"):
             # jax.debug.print("-----------------masked_net check-----------------")
             compare_mask_states(masked_net, masked_net_copy)
             break
-
-        # if sparsity == 1.0 and metrics['q_diff_loss'] != 0.0:
-        #     jax.debug.print("q_diff_loss={l}", l=metrics['q_diff_loss'])
 
 # ---------------------------
 # (5) Extract subnetwork
@@ -382,4 +390,5 @@ compare_q_states(q, q_pruned, pruned=True)
 
 # Evaluate the subnetwork policy
 subnet_policy = get_policy_from_q_net(q_pruned)
-evaluate_policy_on_task(subnet_policy, task=subtask, render_mode="human")
+# evaluate_policy_on_task(subnet_policy, task=subtask, render_mode="human")
+evaluate_policy_on_task(subnet_policy, render_mode="None")
