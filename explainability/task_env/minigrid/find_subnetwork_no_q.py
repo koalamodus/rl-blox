@@ -191,15 +191,41 @@ def soft_mask_sparsity(masks: dict) -> jnp.ndarray:
     # combine all sums
     return jnp.sum(hidden_sums) + jnp.sum(output_sums)
 
+import jax.nn as jnn
 def q_diff_loss(masked_net: MaskedMLP, q_net: MLP, state):
     """
     Loss is the mean squared difference between original Q and masked Q
     """
     q_masked = masked_net(state)
     q_original = jax.lax.stop_gradient(q_net(state))
-    q_values_diff = q_masked - q_original
 
-    q_diff_loss_val = jnp.mean(q_values_diff ** 2)
+    # jax.debug.print("q_masked={q_masked}", q_masked=q_masked)
+    # jax.debug.print("q_original={q_original}", q_original=q_original)
+    # jax.debug.print("----------------")
+        
+    # # Cross entropy loss version 1
+    # # Convert Q-values to probability distributions
+    # p_masked = jnn.softmax(q_masked, axis=-1)
+    # p_original = jnn.softmax(q_original, axis=-1)
+
+    # # Cross-entropy loss: H(p_original, p_masked)
+    # q_diff_loss_val = -jnp.mean(
+    #     jnp.sum(p_original * jnp.log(p_masked + 1e-8), axis=-1)
+    # )
+
+    # # KL divergence loss
+    # q_diff_loss_val = jnp.mean(
+    # jnp.sum(p_original * (jnp.log(p_original + 1e-8) - jnp.log(p_masked + 1e-8)), axis=-1)
+    # )
+
+    # # Cross entropy loss version 2
+    # target_probs = jax.nn.softmax(q_original, axis=-1)
+    # q_diff_loss_val = optax.softmax_cross_entropy(q_masked, target_probs).mean()
+    
+    # # MSE and abs error loss
+    q_values_diff = q_masked - q_original
+    # q_diff_loss_val = jnp.mean(q_values_diff ** 2)
+    q_diff_loss_val = jnp.mean(jnp.abs(q_values_diff))
     return q_diff_loss_val
 
 def subnetwork_loss(masked_net: MaskedMLP, q_net: MLP, state, sparsity_lambda=1e-3):
