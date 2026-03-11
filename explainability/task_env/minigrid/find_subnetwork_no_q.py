@@ -81,6 +81,12 @@ def evaluate_policy_on_task(policy, task="all", render_mode = "human"):
 print("evaluate original q network")
 evaluate_policy_on_task(policy, render_mode="None")
 
+q_copy = nnx.clone(q)
+# # evaluate_policy(env_name, q_copy)
+# print("evaluate q_copy network")
+# policy_copy = get_policy_from_q_net(q_copy)
+# evaluate_policy_on_task(policy_copy, render_mode="None")
+
 # ---------------------------
 # (2) Define masked network
 # ---------------------------
@@ -139,6 +145,7 @@ frozen_params = {
 
 masked_net = MaskedMLP(frozen_params, nnx.Rngs(seed+2))
 # nnx.display(masked_net)
+masked_net_copy = nnx.clone(masked_net)
 
 # ---------------------------
 # (3) Subnetwork loss and sparsity computation
@@ -223,6 +230,7 @@ from functools import partial
 from tqdm import tqdm
 import optax
 import jax.random as jr
+from debug_helper import compare_q_states, compare_mask_states
 
 batch_size = 128
 num_steps = 50_000
@@ -298,11 +306,18 @@ for step in tqdm(range(1, num_steps + 1), desc="Training"):
     if step % 100 == 0:
         sparsity = sparsity_fraction(masked_net, threshold_eval)
         print(f"step={step} loss={loss_val:.6f} q_diff_loss={metrics['q_diff_loss']:.6f} "
-              f"sparsity_loss={metrics['sparsity_loss']:.6f} sparsity@{threshold_eval}={sparsity:.3f}")
+              f"sparsity_loss={metrics['sparsity_loss']:.6f} sparsity@{threshold_eval}={sparsity:.6f}")
         
         # early stopping
-        if sparsity < 0.15 and metrics['q_diff_loss'] < 1e-5:
+        if sparsity < 0.85 and metrics['q_diff_loss'] < 1e-5:
+            # jax.debug.print("-----------------q_net check-----------------")
+            compare_q_states(q, q_copy)
+            # jax.debug.print("-----------------masked_net check-----------------")
+            compare_mask_states(masked_net, masked_net_copy)
             break
+
+        # if sparsity == 1.0 and metrics['q_diff_loss'] != 0.0:
+        #     jax.debug.print("q_diff_loss={l}", l=metrics['q_diff_loss'])
 
 # ---------------------------
 # (5) Extract subnetwork
@@ -357,6 +372,9 @@ nnx.update(q_pruned, pruned_state)
 subnetwork_state = nnx.state(q_pruned)
 # print(f"subnetwork_state is {subnetwork_state}")
 
+
+# jax.debug.print("-----------------q_pruned check-----------------")
+compare_q_states(q, q_pruned, pruned=True)
 
 # with open("ddqn_subnet_ckpt.pkl", "wb") as f:
 #     pickle.dump(subnetwork_state, f)
