@@ -239,13 +239,14 @@ def sample_state(env, subtask, batch_size, key):
     high = jnp.array(env.observation_space.high)
 
     # low and high are currently 0 and 255, but in env it is 0 and 6
+    key, subkey = jr.split(key)
 
     # Sample a batch of states uniformly
     state = jax.random.randint(
-        key,
+        subkey,
         shape=(batch_size, low.shape[0]),
         minval=0,
-        maxval=6,
+        maxval=7,
     )
     # jax.debug.print("state={state}", state=state)
 
