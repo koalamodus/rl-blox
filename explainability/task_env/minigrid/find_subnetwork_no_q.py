@@ -196,8 +196,8 @@ def q_diff_loss(masked_net: MaskedMLP, q_net: MLP, state):
     Loss is the mean squared difference between original Q and masked Q
     """
     q_masked = masked_net(state)
-    q_original = q_net(state)
-    q_values_diff = q_masked - jax.lax.stop_gradient(q_original)
+    q_original = jax.lax.stop_gradient(q_net(state))
+    q_values_diff = q_masked - q_original
 
     q_diff_loss_val = jnp.mean(q_values_diff ** 2)
     return q_diff_loss_val
