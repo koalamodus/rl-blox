@@ -50,6 +50,11 @@ def evaluate_policy(env_name, q_net, num_episodes=10, render_mode="None"):
     eval_env.close()
 
 evaluate_policy(env_name, q)
+# import flax
+# print(flax.__version__)
+# q_copy = nnx.clone(q, variables=True)
+q_copy = nnx.clone(q)
+evaluate_policy(env_name, q_copy)
 
 # ---------------------------
 # (2) Define masked network
@@ -109,6 +114,8 @@ frozen_params = {
 
 masked_net = MaskedMLP(frozen_params, nnx.Rngs(seed+2))
 # nnx.display(masked_net)
+# masked_net_copy = nnx.clone(masked_net, variables=True)
+masked_net_copy = nnx.clone(masked_net)
 
 # ---------------------------
 # (3) Subnetwork loss and sparsity computation
@@ -158,6 +165,11 @@ def q_diff_loss(masked_net: MaskedMLP, q_net: MLP, state):
     """
     Loss is the mean squared difference between original Q and masked Q
     """
+    # m_params = nnx.state(masked_net, nnx.Param)
+    # q_params = nnx.state(q_net, nnx.Param)
+    # jax.debug.print("masked_net_param={m}", m=m_params)
+    # jax.debug.print("q_net_param={q}", q=q_params)
+    # jax.debug.print("----------------")
     q_masked = masked_net(state)
     q_original = q_net(state)
     q_values_diff = q_masked - jax.lax.stop_gradient(q_original)
@@ -191,6 +203,7 @@ def subnetwork_loss(masked_net: MaskedMLP, q_net: MLP, state, sparsity_lambda=1e
 # ---------------------------
 from functools import partial
 from tqdm import tqdm
+from debug_helper import compare_q_states, compare_mask_states
 
 batch_size = 128
 num_steps = 50_000
@@ -240,11 +253,20 @@ for step in tqdm(range(1, num_steps + 1), desc="Training"):
     if step % 100 == 0:
         sparsity = sparsity_fraction(masked_net, threshold_eval)
         print(f"step={step} loss={loss_val:.6f} q_diff_loss={metrics['q_diff_loss']:.6f} "
-              f"sparsity_loss={metrics['sparsity_loss']:.6f} sparsity@{threshold_eval}={sparsity:.3f}")
+              f"sparsity_loss={metrics['sparsity_loss']:.6f} sparsity@{threshold_eval}={sparsity:.6f}")
         
         # early stopping
         if sparsity < 0.15 and metrics['q_diff_loss'] < 0.01:
+            jax.debug.print("-----------------q_net check-----------------")
+            compare_q_states(q, q_copy)
+            jax.debug.print("-----------------masked_net check-----------------")
+            compare_mask_states(masked_net, masked_net_copy)
             break
+
+        # if sparsity != 1.0 and metrics['q_diff_loss'] == 0.0:
+        #     jax.debug.print("q_diff_loss={l}", l=metrics['q_diff_loss'])
+        #     jax.debug.print("-----------------q_net check-----------------")
+        #     compare_q_states(q, q_copy)
 
 # ---------------------------
 # (5) Extract subnetwork
@@ -299,6 +321,11 @@ pruned_state = {
 
 # Update the new MLP with pruned parameters
 nnx.update(q_pruned, pruned_state)
+
+jax.debug.print("-----------------q_net check-----------------")
+compare_q_states(q, q_pruned, pruned=True)
+# jax.debug.print("-----------------pruned_net check-----------------")
+# compare_mask_states(masked_net, masked_net_pruned)
 
 # save pruned network
 subnetwork_state = nnx.state(q_pruned)
