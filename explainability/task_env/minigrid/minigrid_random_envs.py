@@ -1,4 +1,5 @@
 import numpy as np
+import random
 from gymnasium import spaces
 from gymnasium.core import ObservationWrapper
 
@@ -68,13 +69,29 @@ class FindObjectEnv(MiniGridEnv):
             "grey": Ball("grey"),
         }
 
-        self.put_obj(objects["red"], width - 2, 1)
-        self.put_obj(objects["blue"], width - 2, 3)
-        self.put_obj(objects["green"], width - 2, 5)
-        self.put_obj(objects["yellow"], width - 2, 7)
-        self.put_obj(objects["purple"], width - 2, 9)
-        self.put_obj(objects["grey"], width - 2, 11)
+        # list of the fixed positions you want to choose from
+        positions = [
+            (width - 2, 1),
+            (width - 2, 3),
+            (width - 2, 5),
+            (width - 2, 7),
+            (width - 2, 9),
+            (width - 2, 11),
+        ]
 
+        # randomly shuffle the list of positions
+        random.shuffle(positions)  # rearranges positions in-place
+
+        # place each ball at one shuffled position
+        for ball_obj, pos in zip(objects.values(), positions):
+            i, j = pos
+            self.put_obj(ball_obj, i, j)
+            ball_obj.cur_pos = (i, j)  # make sure Ball knows its position
+        
+        # # random agent pos and dir
+        # self.place_agent()
+
+        # fixed agent pos and dir
         self.agent_pos = (1, 6)
         self.agent_dir = 0
 
