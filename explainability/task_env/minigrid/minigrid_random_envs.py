@@ -45,7 +45,7 @@ class FindObjectEnv(MiniGridEnv):
             mission_space=mission_space,
             width=13,
             height=13,
-            max_steps=500,
+            max_steps=100,
             **kwargs,
         )
 
@@ -92,10 +92,6 @@ class FindObjectEnv(MiniGridEnv):
         if ((abs(ay - ty) + abs(ax - tx)) == 1):
             reward = self._reward()
             terminated = True
-        # # TODO: consider to remove done action in training
-        # if action == self.actions.done:
-        #     print(f"action: done")
-        #     terminated = True
 
         return obs, reward, terminated, truncated, info
 
@@ -129,6 +125,8 @@ class FlatContextObsWrapper(ObservationWrapper):
             shape=(imgSize + 6,),
             dtype="uint8",
         )
+
+        self.action_space = spaces.Discrete(4)
     
     def observation(self, obs):
         image = obs["image"][:, :, :2] # (OBJECT_IDX, COLOR_IDX, STATE) -> (OBJECT_IDX, COLOR_IDX)
