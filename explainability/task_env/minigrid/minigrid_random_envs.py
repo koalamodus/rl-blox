@@ -1,6 +1,4 @@
-import operator
 import numpy as np
-from functools import reduce
 from gymnasium import spaces
 from gymnasium.core import ObservationWrapper
 
@@ -14,6 +12,19 @@ from minigrid.minigrid_env import MiniGridEnv
 # COLOR_TO_IDX = {"red": 0, "green": 1, "blue": 2, "purple": 3, "yellow": 4, "grey": 5}
 # context = COLOR_TO_IDX[color]
 
+# OBJECT_TO_IDX = {
+#     "unseen": 0,
+#     "empty": 1,
+#     "wall": 2,
+#     "floor": 3,
+#     "door": 4,
+#     "key": 5,
+#     "ball": 6,
+#     "box": 7,
+#     "goal": 8,
+#     "lava": 9,
+#     "agent": 10,
+# }
 
 class FindObjectEnv(MiniGridEnv):
     def __init__(
@@ -109,18 +120,18 @@ class FlatContextObsWrapper(ObservationWrapper):
     def __init__(self, env):
         super().__init__(env)
 
-        imgSpace = env.observation_space.spaces["image"]
-        imgSize = reduce(operator.mul, imgSpace.shape, 1)
+        img_height, img_width, num_channels = env.observation_space.spaces["image"].shape
+        imgSize = img_height * img_width * (num_channels - 1)
 
         self.observation_space = spaces.Box(
             low=0,
-            high=255,
+            high=7, # obj is 0-6, color is 0-5, highest value is not included
             shape=(imgSize + 6,),
             dtype="uint8",
         )
     
     def observation(self, obs):
-        image = obs["image"]
+        image = obs["image"][:, :, :2] # (OBJECT_IDX, COLOR_IDX, STATE) -> (OBJECT_IDX, COLOR_IDX)
 
         if "red" in obs["mission"]:
             context = COLOR_TO_IDX["red"]
