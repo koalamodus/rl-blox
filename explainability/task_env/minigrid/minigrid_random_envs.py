@@ -105,9 +105,23 @@ class FindObjectEnv(MiniGridEnv):
         ax, ay = self.agent_pos
         tx, ty = self.target_pos
 
-        # # TODO: get reward only when agent is facing the target
+        # get reward only when agent is facing the target
+        agent_facing_object = (
+            (ax == (tx - 1) and ay == ty and self.agent_dir == 0) or  # left of target, facing right
+            (ax == (tx + 1) and ay == ty and self.agent_dir == 2) or  # right of target, facing left
+            (ax == tx and ay == (ty - 1) and self.agent_dir == 1) or  # above target, facing down
+            (ax == tx and ay == (ty + 1) and self.agent_dir == 3)     # below target, facing up
+        )
+
+        # # get reward only when agent is left of target and facing target
+        # correct_y = (ay - ty) == 0
+        # correct_x = (tx - ax) == 1
+        # correct_dir = self.agent_dir == 0
+        # agent_facing_object = correct_x and correct_y and correct_dir
+
         # Get reward and terminate, if agent is at the above, below, left, right position to target object
-        if ((abs(ay - ty) + abs(ax - tx)) == 1):
+        # if ((abs(ay - ty) + abs(ax - tx)) == 1):
+        if agent_facing_object:
             reward = self._reward()
             terminated = True
 
