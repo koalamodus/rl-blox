@@ -46,7 +46,8 @@ class FindObjectEnv(MiniGridEnv):
             mission_space=mission_space,
             width=13,
             height=13,
-            max_steps=100,
+            max_steps=20,
+            agent_view_size=3,
             **kwargs,
         )
 
@@ -143,7 +144,7 @@ class FlatContextObsWrapper(ObservationWrapper):
             dtype="uint8",
         )
 
-        self.action_space = spaces.Discrete(4)
+        self.action_space = spaces.Discrete(3)
     
     def observation(self, obs):
         image = obs["image"][:, :, :2] # (OBJECT_IDX, COLOR_IDX, STATE) -> (OBJECT_IDX, COLOR_IDX)
