@@ -60,12 +60,12 @@ env.action_space.seed(seed)
 
 hparams_model = dict(
     activation="relu",
-    hidden_nodes=[128, 128],
+    hidden_nodes=[128, 128, 128],
 )
 hparams_algorithm = dict(
     batch_size=64,
     buffer_size=50_000,
-    total_timesteps=50_000,
+    total_timesteps=100_000,
     learning_rate=0.002,
     #learning_starts=2_000,
     seed=seed,
