@@ -4,21 +4,23 @@ import flax.nnx as nnx
 import jax.numpy as jnp
 import orbax.checkpoint as ocp
 from rl_blox.blox.function_approximator.mlp import MLP
+# import jax.debug
 
 
-def eval_policy(color, env, policy, verbose=False, num_episode=1):
+def eval_policy(color, env, policy, verbose=False, num_episode=1, seed=42):
     task_score_info = {}
     sum_ep_reward = 0.0
     num_task_success = 0.0
     for _ in range(num_episode):
         ep_reward = 0.0
-        obs, _ = env.reset()
+        obs, _ = env.reset(seed=seed)
         terminated = truncated = False
 
         while not (terminated or truncated):
             action = policy(obs)
             # print(f"action: {action}")
             obs, reward, terminated, truncated, _ = env.step(action)
+            # jax.debug.print("obs={obs}", obs=obs)
             ep_reward += reward
             if reward > 0.0:
                 num_task_success += 1

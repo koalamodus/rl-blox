@@ -20,10 +20,10 @@ from rl_blox.blox.function_approximator.mlp import MLP
 
 
 # Set up environment to get input/output shapes
-obj_colors = ["red", "green", "blue"]
+OBJ_COLORS = ["red", "green", "blue"]
 # subtask = None  # TODO: change context sampling for all subtasks
 subtask = "green"  #
-env = make_ocean_env(target_color=subtask, obj_colors=obj_colors)
+env = make_ocean_env(target_color=subtask, obj_colors=OBJ_COLORS)
 
 # Recreate MLP with same architecture as training
 hparams_model = dict(
@@ -65,12 +65,12 @@ policy = get_policy_from_q_net(q)
 
 
 from eval_helper import eval_policy
-def evaluate_policy_on_task(policy, task=None, obj_colors=obj_colors, render_mode="human"):
+def evaluate_policy_on_task(policy, task=None, obj_colors=OBJ_COLORS, render_mode="human", seed=42):
     if task == None:
         task = obj_colors
     else:
         task = task if isinstance(task, list) else [task]
-    
+
     for target_color in task:
         assert target_color in COLOR_NAMES
 
@@ -79,13 +79,13 @@ def evaluate_policy_on_task(policy, task=None, obj_colors=obj_colors, render_mod
         eval_env.close()
 
 print("evaluate original q network")
-evaluate_policy_on_task(policy, task=None, obj_colors=obj_colors, render_mode="None")
+evaluate_policy_on_task(policy, task=None, obj_colors=OBJ_COLORS, render_mode="None", seed=seed)
 
 q_copy = nnx.clone(q)
 # # evaluate_policy(env_name, q_copy)
 # print("evaluate q_copy network")
 # policy_copy = get_policy_from_q_net(q_copy)
-# evaluate_policy_on_task(policy_copy, task=subtask, obj_colors=obj_colors, render_mode="None")
+# evaluate_policy_on_task(policy_copy, task=subtask, obj_colors=OBJ_COLORS, render_mode="None")
 
 # ---------------------------
 # (2) Define masked network
@@ -135,10 +135,10 @@ class MaskedMLP(nnx.Module):
         w = jax.lax.stop_gradient(self.frozen_params["output_layer"]["kernel"]) * mask
         b = jax.lax.stop_gradient(self.frozen_params["output_layer"]["bias"])
         return x @ w + b
-    
+
 # Instantiate masked network
 frozen_params = {
-    "hidden_layers": [{"kernel": layer.kernel.value, "bias": layer.bias.value} 
+    "hidden_layers": [{"kernel": layer.kernel.value, "bias": layer.bias.value}
                       for layer in q.hidden_layers],
     "output_layer": {"kernel": q.output_layer.kernel.value, "bias": q.output_layer.bias.value}
 }
@@ -202,7 +202,7 @@ def q_diff_loss(masked_net: MaskedMLP, q_net: MLP, state):
     # jax.debug.print("q_masked={q_masked}", q_masked=q_masked)
     # jax.debug.print("q_original={q_original}", q_original=q_original)
     # jax.debug.print("----------------")
-        
+
     # # Cross entropy loss version 1
     # # Convert Q-values to probability distributions
     # p_masked = jnn.softmax(q_masked, axis=-1)
@@ -221,7 +221,7 @@ def q_diff_loss(masked_net: MaskedMLP, q_net: MLP, state):
     # # Cross entropy loss version 2
     # target_probs = jax.nn.softmax(q_original, axis=-1)
     # q_diff_loss_val = optax.softmax_cross_entropy(q_masked, target_probs).mean()
-    
+
     # # MSE and abs error loss
     q_values_diff = q_masked - q_original
     # q_diff_loss_val = jnp.mean(q_values_diff ** 2)
@@ -335,7 +335,7 @@ for step in tqdm(range(1, num_steps + 1), desc="Training"):
     key, subkey = jr.split(key)
     state = sample_state(env, subtask, batch_size, key=subkey)
     lam = sparsity_schedule(step, lambda_start, lambda_end, warmup_steps, num_steps)
-   
+
     loss_val, metrics = train_step(optimizer, masked_net, q, state, lam)
 
     if step % 1000 == 0:
@@ -415,21 +415,21 @@ print(f"Saved {subtask} subnetwork checkpoint.")
 
 # Evaluate the subnetwork policy
 subnet_policy = get_policy_from_q_net(q_pruned)
-# evaluate_policy_on_task(subnet_policy, task=subtask, obj_colors=obj_colors, render_mode="None")
-evaluate_policy_on_task(subnet_policy, task=None, obj_colors=obj_colors, render_mode="None")
+# evaluate_policy_on_task(subnet_policy, task=subtask, obj_colors=OBJ_COLORS, render_mode="None", seed=seed+1)
+evaluate_policy_on_task(subnet_policy, task=None, obj_colors=OBJ_COLORS, render_mode="None", seed=seed+1)
 
 # For comparison
 print("evaluate original q network")
-evaluate_policy_on_task(policy, task=None, obj_colors=obj_colors, render_mode="None")
+evaluate_policy_on_task(policy, task=None, obj_colors=OBJ_COLORS, render_mode="None", seed=seed+2)
 # ---------------------------
 # Run interactive demo
 # ---------------------------
 
-eval_env = make_ocean_env(target_color=None, obj_colors=obj_colors, render_mode="human")
-obs, _ = eval_env.reset()
+eval_env = make_ocean_env(target_color=None, obj_colors=OBJ_COLORS, render_mode="human")
+obs, _ = eval_env.reset(seed=seed+3)
 while True:
     action = subnet_policy(obs)
     obs, reward, terminated, truncated, info = eval_env.step(action)
     if terminated or truncated:
         print(f"{eval_env.current_task_color} reward: {reward}")
-        obs, _ = eval_env.reset()
+        obs, _ = eval_env.reset(seed=seed+4)

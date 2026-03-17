@@ -11,21 +11,21 @@ from rl_blox.blox.function_approximator.mlp import MLP
 from rl_blox.blox.replay_buffer import ReplayBuffer
 from rl_blox.logging.logger import AIMLogger
 
+seed = 42
 # ---------------------------
 # Test env
 # ---------------------------
-
 print("Test env")
 obj_colors = ["red", "green", "blue",] # COLOR_NAMES  #
 subtask = None # "red", "green", "blue", "purple", "yellow", "grey" or None
 env = make_ocean_env(target_color=subtask, obj_colors=obj_colors, render_mode="human")
 num_eps=3
 
-print(env.action_space)
-print(env.observation_space)
+print(f"action space: {env.action_space}")
+print(f"observation space: {env.observation_space}")
 
 for _ in range(num_eps):
-    obs, _ = env.reset()
+    obs, _ = env.reset(seed=seed)
     done = False
 
     # for _ in range(num_steps):
@@ -54,7 +54,6 @@ print("Train ddqn")
 
 env_name = f"minigrid_random_{subtask}"
 env = make_ocean_env(target_color=subtask, obj_colors=obj_colors)
-seed = 42
 env = gym.wrappers.RecordEpisodeStatistics(env)
 env.action_space.seed(seed)
 
@@ -146,7 +145,7 @@ evaluate_policy_on_task(policy, task=subtask, obj_colors=obj_colors, render_mode
 
 # Show the final policy
 eval_env = make_ocean_env(target_color=subtask, obj_colors=obj_colors, render_mode="human")
-obs, _ = eval_env.reset()
+obs, _ = eval_env.reset(seed=seed+1)
 while True:
     action = policy(obs)
     next_obs, reward, terminated, truncated, info = eval_env.step(action)
@@ -154,7 +153,7 @@ while True:
     if terminated or truncated:
         # print(f"obs={obs}")
         print(f"{eval_env.current_task_color} reward: {reward}")
-        obs, _ = eval_env.reset()
+        obs, _ = eval_env.reset(seed=seed+2)
     else:
         obs = next_obs
 
