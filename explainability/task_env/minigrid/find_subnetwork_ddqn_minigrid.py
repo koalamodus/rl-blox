@@ -4,10 +4,10 @@ from minigrid_one_context_env import make_ocean_env
 import jax
 import flax.nnx as nnx
 import jax.numpy as jnp
+import jax.random as jr
 
 seed = 10  # random seed for np and jax
-key = jax.random.PRNGKey(seed)
-
+key = jr.PRNGKey(seed)
 
 train_mask = True
 save_final_mask = train_mask
@@ -23,6 +23,7 @@ from rl_blox.blox.function_approximator.mlp import MLP
 OBJ_COLORS = ["red", "green", "blue"]
 # subtask = None
 subtask = "green"
+env_name = f"ocean_{subtask}_simple"
 env = make_ocean_env(target_color=subtask, obj_colors=OBJ_COLORS)
 
 # Recreate MLP with same architecture as training
@@ -31,10 +32,9 @@ hparams_model = dict(
     n_outputs=int(env.action_space.n),
     activation="relu",
     hidden_nodes=[128, 128],
-    rngs=nnx.Rngs(seed)
 )
 
-abstract_mlp = MLP(**hparams_model)
+abstract_mlp = MLP(rngs=nnx.Rngs(seed), **hparams_model)
 graphdef, abstract_state = nnx.split(abstract_mlp)
 
 # restore q net from checkpoint
@@ -241,17 +241,30 @@ def subnetwork_loss(masked_net: MaskedMLP, q_net: MLP, state, sparsity_lambda=1e
 from functools import partial
 from tqdm import tqdm
 import optax
-import jax.random as jr
 from debug_helper import compare_q_states, compare_mask_states
+from rl_blox.logging.logger import AIMLogger
 
-batch_size = 128
-num_steps = 100_000
-lambda_start, lambda_end = 1e-8, 1e-8
-warmup_steps = 3_000
-threshold_eval = 0.5
-lr = 1e-4
+hparams_algorithm = dict(
+    batch_size=128,
+    total_timesteps=100_000,
+    learning_rate=0.0001,
+    # learning_rate_start=2e-3,
+    # learning_rate_end=1e-4,
+    learning_starts=3_000,
+    lambda_start= 1e-8,
+    lambda_end= 1e-8,
+    threshold_eval=0.5,
+)
 
-optimizer = nnx.Optimizer(masked_net, optax.adam(lr), wrt=nnx.Param)
+logger = AIMLogger()
+logger.define_experiment(
+    env_name=env_name,
+    algorithm_name="DDQN_pruning",
+    hparams=hparams_model | hparams_algorithm,
+)
+
+threshold_eval = hparams_algorithm.get("threshold_eval")
+optimizer = nnx.Optimizer(masked_net, optax.adam(hparams_algorithm.pop("learning_rate")), wrt=nnx.Param)
 
 def sample_state(env, subtask=None, batch_size=128, key=jr.PRNGKey(seed)):
     # Get the observation space bounds
@@ -319,13 +332,39 @@ def train_step_with_loss(
 train_step = partial(train_step_with_loss, subnetwork_loss)
 train_step = partial(nnx.jit, static_argnames=("lam",))(train_step)
 
-key = jr.PRNGKey(seed + 123)
-for step in tqdm(range(1, num_steps + 1), desc="Training"):
+
+# Train
+# if logger is not None:
+#     logger.start_new_episode()
+
+# if bar is None:
+#     progress = trange(
+#         global_step, total_timesteps, disable=not progress_bar
+#     )
+# else:
+#     progress = bar
+
+for step in tqdm(range(1, hparams_algorithm.get("total_timesteps") + 1), desc="Training"):
     key, subkey = jr.split(key)
-    state = sample_state(env, subtask, batch_size, key=subkey)
-    lam = sparsity_schedule(step, lambda_start, lambda_end, warmup_steps, num_steps)
+    state = sample_state(env, subtask, hparams_algorithm.get("batch_size"), key=subkey)
+    lam = sparsity_schedule(step, hparams_algorithm.get("lambda_start"), hparams_algorithm.get("lambda_end"),
+                            hparams_algorithm.get("learning_starts"), hparams_algorithm.get("total_timesteps"))
 
     loss_val, metrics = train_step(optimizer, masked_net, q, state, lam)
+
+    if logger is not None:
+        logger.record_stat(
+            "q diff loss", metrics['q_diff_loss'], step=step + 1
+        )
+        logger.record_stat(
+            "sparsity loss", metrics['sparsity_loss'], step=step + 1
+        )
+        logger.record_stat(
+            "soft sparsity", metrics['soft_sparsity'], step=step + 1
+        )
+        logger.record_stat(
+            "hard sparsity", metrics['hard_sparsity'], step=step + 1
+        )
 
     if step % 1000 == 0:
         print(f"step={step} loss={loss_val:.6f} q_diff_loss={metrics['q_diff_loss']:.6f} "
@@ -377,7 +416,7 @@ print(f"Pruned network ready, fraction of weights kept: {hard_mask_sparsity(mask
 pruned_weights = hard_threshold_params(masked_net, threshold_eval)
 # print(f"pruned_weights: {pruned_weights}")
 
-q_pruned = MLP(**hparams_model)
+q_pruned = MLP(rngs=nnx.Rngs(seed), **hparams_model)
 
 # For hidden layers: convert list of dicts to dict of dicts keyed by index (optional)
 hidden_layers_dict = {i: layer for i, layer in enumerate(pruned_weights["hidden_layers"])}
