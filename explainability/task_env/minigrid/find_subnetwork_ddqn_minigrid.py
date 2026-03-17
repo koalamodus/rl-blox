@@ -150,18 +150,18 @@ masked_net_copy = nnx.clone(masked_net)
 # ---------------------------
 # (3) Subnetwork loss and sparsity computation
 # ---------------------------
-def sparsity_fraction(masked_net: MaskedMLP, threshold: float = 0.5) -> jnp.ndarray:
+def hard_mask_sparsity(mask_logits: dict, threshold: float = 0.5) -> jnp.ndarray:
     """Compute fraction of weights masked (hard mask >= threshold) in a MaskedMLP."""
 
     masks = []
 
     # hidden layers
-    for layer in masked_net.mask_logits["hidden_layers"]:
+    for layer in mask_logits["hidden_layers"]:
         # apply sigmoid to logits to get soft mask
         masks.append(jax.nn.sigmoid(layer["kernel"].value))
 
     # output layer
-    masks.append(jax.nn.sigmoid(masked_net.mask_logits["output_layer"]["kernel"].value))
+    masks.append(jax.nn.sigmoid(mask_logits["output_layer"]["kernel"].value))
 
     # flatten and concatenate all masks
     masks_flat = jnp.concatenate([m.flatten() for m in masks])
@@ -239,12 +239,17 @@ def subnetwork_loss(masked_net: MaskedMLP, q_net: MLP, state, sparsity_lambda=1e
         sparsity_lambda: Weight for mask sparsity regularization
     """
     q_diff_loss_val = q_diff_loss(masked_net, q_net, state)
-    sparsity_loss = sparsity_lambda * soft_mask_sparsity(masked_net.mask_logits)
+    soft_sparsity = soft_mask_sparsity(masked_net.mask_logits)
+    sparsity_loss = sparsity_lambda * soft_sparsity
     total_loss = q_diff_loss_val + sparsity_loss
+
+    hard_sparsity = hard_mask_sparsity(masked_net.mask_logits)
 
     metrics = {
         'q_diff_loss': q_diff_loss_val,
-        'sparsity_loss': sparsity_loss
+        'soft_sparsity': soft_sparsity,
+        'hard_sparsity': hard_sparsity,
+        'sparsity_loss': sparsity_loss,
     }
 
     return total_loss, metrics
@@ -342,15 +347,15 @@ for step in tqdm(range(1, num_steps + 1), desc="Training"):
     loss_val, metrics = train_step(optimizer, masked_net, q, state, lam)
 
     if step % 1000 == 0:
-        sparsity = sparsity_fraction(masked_net, threshold_eval)
+        hard_sparsity = hard_mask_sparsity(masked_net.mask_logits, threshold_eval)
         print(f"step={step} loss={loss_val:.6f} q_diff_loss={metrics['q_diff_loss']:.6f} "
-              f"sparsity_loss={metrics['sparsity_loss']:.6f} sparsity@{threshold_eval}={sparsity:.6f}")
+              f"sparsity_loss={metrics['sparsity_loss']:.6f} sparsity@{threshold_eval}={hard_sparsity:.6f}")
 
     if step % 1 == 0 and step > 10000:
         # early stopping
-        if sparsity < 0.25 and metrics['q_diff_loss'] < 1e-2:
+        if hard_sparsity < 0.4 and metrics['q_diff_loss'] < 1e-2:
             print(f"step={step} loss={loss_val:.6f} q_diff_loss={metrics['q_diff_loss']:.6f} "
-              f"sparsity_loss={metrics['sparsity_loss']:.6f} sparsity@{threshold_eval}={sparsity:.6f}")
+              f"sparsity_loss={metrics['sparsity_loss']:.6f} sparsity@{threshold_eval}={hard_sparsity:.6f}")
             # jax.debug.print("-----------------q_net check-----------------")
             compare_q_states(q, q_copy)
             # jax.debug.print("-----------------masked_net check-----------------")
@@ -388,7 +393,7 @@ def hard_threshold_params(masked_net, threshold=0.5):
 
     return pruned_weights
 
-print(f"Pruned network ready, fraction of weights kept: {sparsity_fraction(masked_net, threshold_eval):.3f}")
+print(f"Pruned network ready, fraction of weights kept: {hard_mask_sparsity(masked_net.mask_logits, threshold_eval):.3f}")
 pruned_weights = hard_threshold_params(masked_net, threshold_eval)
 # print(f"pruned_weights: {pruned_weights}")
 
