@@ -21,8 +21,8 @@ from rl_blox.blox.function_approximator.mlp import MLP
 
 # Set up environment to get input/output shapes
 OBJ_COLORS = ["red", "green", "blue"]
-# subtask = None  # TODO: change context sampling for all subtasks
-subtask = "green"  #
+# subtask = None
+subtask = "green"
 env = make_ocean_env(target_color=subtask, obj_colors=OBJ_COLORS)
 
 # Recreate MLP with same architecture as training
@@ -75,7 +75,7 @@ def evaluate_policy_on_task(policy, task=None, obj_colors=OBJ_COLORS, render_mod
         assert target_color in COLOR_NAMES
 
         eval_env = make_ocean_env(target_color, obj_colors, render_mode)
-        _ = eval_policy(target_color, eval_env, policy, verbose=True, num_episode=100)
+        _ = eval_policy(target_color, eval_env, policy, verbose=True, num_episode=100, seed=seed)
         eval_env.close()
 
 print("evaluate original q network")
@@ -275,7 +275,6 @@ def sample_state(env, subtask=None, batch_size=128, key=jr.PRNGKey(seed)):
     # low and high are currently 0 and 255, but in env it is 0 and 6
     key, subkey = jr.split(key)
 
-    # TODO: uncomment below to sample context for a specific subtask
     # Sample a batch of states uniformly
     state = jax.random.randint(
         subkey,
@@ -285,23 +284,27 @@ def sample_state(env, subtask=None, batch_size=128, key=jr.PRNGKey(seed)):
     )
     # jax.debug.print("state={state}", state=state)
 
-    # Sample only the subtask
-    # Get the context index
-    try:
-        context = COLOR_TO_IDX[subtask]
-    except KeyError:
-        raise RuntimeError(f"Unknown subtask: {subtask}")
-    
-    # TODO: uncomment below to sample context for all subtasks
-    # # Sample all subtasks
-    # key, subkey = jr.split(key)
+    obj_colors = env.obj_colors
 
-    # context = jax.random.randint(
-    #     subkey,
-    #     shape=(),           # scalar
-    #     minval=0,
-    #     maxval=len(obj_colors),
-    # )
+    if subtask is None:
+        # Sample all subtasks
+
+        # Get allowed indices
+        obj_color_indices = jnp.array([COLOR_TO_IDX[c] for c in OBJ_COLORS])
+
+        # sample index into ObJ_COLORS
+        key, subkey = jr.split(key)
+        idx = jax.random.randint(subkey, shape=(), minval=0, maxval=len(obj_color_indices))
+
+        context = obj_color_indices[idx]
+        # jax.debug.print("context={c}", c=context)
+
+    elif subtask in obj_colors:
+        # Sample only the subtask
+        context = COLOR_TO_IDX[subtask]
+
+    else:
+        raise RuntimeError(f"Unknown subtask: {subtask}")
 
     # broadcast to batch
     context_batch = jnp.full((batch_size,), context)
@@ -346,6 +349,8 @@ for step in tqdm(range(1, num_steps + 1), desc="Training"):
     if step % 10 == 0 and step > 10000:
         # early stopping
         if sparsity < 0.5 and metrics['q_diff_loss'] < 1e-2:
+            print(f"step={step} loss={loss_val:.6f} q_diff_loss={metrics['q_diff_loss']:.6f} "
+              f"sparsity_loss={metrics['sparsity_loss']:.6f} sparsity@{threshold_eval}={sparsity:.6f}")
             # jax.debug.print("-----------------q_net check-----------------")
             compare_q_states(q, q_copy)
             # jax.debug.print("-----------------masked_net check-----------------")
