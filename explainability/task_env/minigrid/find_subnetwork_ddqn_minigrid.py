@@ -30,7 +30,7 @@ hparams_model = dict(
     n_features=env.observation_space.shape[0],
     n_outputs=int(env.action_space.n),
     activation="relu",
-    hidden_nodes=[128, 128, 128],
+    hidden_nodes=[128, 128],
     rngs=nnx.Rngs(seed)
 )
 
@@ -259,7 +259,7 @@ import jax.random as jr
 from debug_helper import compare_q_states, compare_mask_states
 
 batch_size = 128
-num_steps = 50_000
+num_steps = 100_000
 lambda_start, lambda_end = 1e-8, 1e-8
 warmup_steps = 3_000
 threshold_eval = 0.5
@@ -345,10 +345,10 @@ for step in tqdm(range(1, num_steps + 1), desc="Training"):
         sparsity = sparsity_fraction(masked_net, threshold_eval)
         print(f"step={step} loss={loss_val:.6f} q_diff_loss={metrics['q_diff_loss']:.6f} "
               f"sparsity_loss={metrics['sparsity_loss']:.6f} sparsity@{threshold_eval}={sparsity:.6f}")
-        
-    if step % 10 == 0 and step > 10000:
+
+    if step % 1 == 0 and step > 10000:
         # early stopping
-        if sparsity < 0.5 and metrics['q_diff_loss'] < 1e-2:
+        if sparsity < 0.25 and metrics['q_diff_loss'] < 1e-2:
             print(f"step={step} loss={loss_val:.6f} q_diff_loss={metrics['q_diff_loss']:.6f} "
               f"sparsity_loss={metrics['sparsity_loss']:.6f} sparsity@{threshold_eval}={sparsity:.6f}")
             # jax.debug.print("-----------------q_net check-----------------")
