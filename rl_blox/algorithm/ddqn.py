@@ -140,7 +140,7 @@ def train_ddqn(
     # initialise episode
     obs, _ = env.reset(seed=seed)
 
-    epsilon = linear_schedule(total_timesteps)
+    epsilon = linear_schedule(total_timesteps, end=0.01, fraction=0.2)
 
     key, subkey = jax.random.split(key)
     epsilon_rolls = jax.random.uniform(subkey, (total_timesteps,))
@@ -181,6 +181,9 @@ def train_ddqn(
                     )
                     logger.record_epoch(
                         "q", q_net, step=step + 1, episode=episode
+                    )
+                    logger.record_stat(
+                        "epsilon", epsilon[step], step=step + 1, episode=episode
                     )
 
             if step % target_update_frequency == 0:
