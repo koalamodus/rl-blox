@@ -66,6 +66,8 @@ hparams_algorithm = dict(
     buffer_size=50_000,
     total_timesteps=100_000,
     learning_rate=0.002,
+    learning_rate_start=2e-3,
+    learning_rate_end=1e-4,
     #learning_starts=2_000,
     seed=seed,
 )
@@ -88,9 +90,17 @@ q_net = MLP(
 # Initialise the replay buffer
 rb = ReplayBuffer(hparams_algorithm.pop("buffer_size"), discrete_actions=True)
 
-# initialise optimiser
+lr_constant = hparams_algorithm.pop("learning_rate")
+# Set learning rate scheduler
+lr_schedule_fn = optax.linear_schedule(
+   init_value=hparams_algorithm.pop("learning_rate_start"), end_value=hparams_algorithm.pop("learning_rate_end"), transition_steps=hparams_algorithm.get("total_timesteps"))
+
+# lr = lr_constant
+lr = lr_schedule_fn
+
+# Initialise optimiser
 optimizer = nnx.Optimizer(
-    q_net, optax.adam(hparams_algorithm.pop("learning_rate")), wrt=nnx.Param
+    q_net, optax.adam(learning_rate=lr), wrt=nnx.Param
 )
 
 # Train
