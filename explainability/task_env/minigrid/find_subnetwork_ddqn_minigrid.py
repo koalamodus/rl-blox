@@ -65,27 +65,32 @@ policy = get_policy_from_q_net(q)
 
 
 from eval_helper import eval_policy
-def evaluate_policy_on_task(policy, task=None, obj_colors=OBJ_COLORS, render_mode="human", seed=42):
+def evaluate_policy_on_task(policy, task=None, obj_colors=OBJ_COLORS, render_mode="human", seed=42, verbose=True):
     if task == None:
         task = obj_colors
     else:
         task = task if isinstance(task, list) else [task]
+    
+    all_task_scores = {}  # store results for all colors
 
     for target_color in task:
         assert target_color in COLOR_NAMES
 
         eval_env = make_ocean_env(target_color, obj_colors, render_mode)
-        _ = eval_policy(target_color, eval_env, policy, verbose=True, num_episode=100, seed=seed)
+        task_score_info = eval_policy(target_color, eval_env, policy, verbose=verbose, num_episode=100, seed=seed)
         eval_env.close()
 
+        all_task_scores.update(task_score_info)
+    return all_task_scores
+
 print("evaluate original q network")
-evaluate_policy_on_task(policy, task=None, obj_colors=OBJ_COLORS, render_mode="None", seed=seed)
+_ = evaluate_policy_on_task(policy, task=None, obj_colors=OBJ_COLORS, render_mode="None", seed=seed)
 
 q_copy = nnx.clone(q)
 # # evaluate_policy(env_name, q_copy)
 # print("evaluate q_copy network")
 # policy_copy = get_policy_from_q_net(q_copy)
-# evaluate_policy_on_task(policy_copy, task=subtask, obj_colors=OBJ_COLORS, render_mode="None")
+# _ = evaluate_policy_on_task(policy_copy, task=subtask, obj_colors=OBJ_COLORS, render_mode="None")
 
 # ---------------------------
 # (2) Define masked network
@@ -235,13 +240,65 @@ def subnetwork_loss(masked_net: MaskedMLP, q_net: MLP, state, sparsity_lambda=1e
     return total_loss, metrics
 
 # ---------------------------
-# (4) Training loop
+# (4) Extract subnetwork & Evaluate pruned network
+# ---------------------------
+def hard_threshold_params(masked_net, threshold=0.5):
+    """
+    Return a dict of frozen weights with masks hard-thresholded.
+    Works for any MaskedMLP instance (or similar structure).
+    """
+    pruned_weights = {}
+
+    def apply_threshold(layer_params, mask_params):
+        out = {}
+        for name, value in layer_params.items():
+            if name in mask_params:
+                mask = (jax.nn.sigmoid(mask_params[name].value) >= threshold).astype(value.dtype)
+                out[name] = jax.lax.stop_gradient(value * mask)
+            else:
+                out[name] = jax.lax.stop_gradient(value)
+        return out
+
+    pruned_weights["hidden_layers"] = [
+        apply_threshold(lp, mp)
+        for lp, mp in zip(masked_net.frozen_params["hidden_layers"], masked_net.mask_logits["hidden_layers"])
+    ]
+
+    pruned_weights["output_layer"] = apply_threshold(
+        masked_net.frozen_params["output_layer"], masked_net.mask_logits["output_layer"]
+    )
+
+    return pruned_weights
+
+def get_pruned_state(masked_net: MaskedMLP, threshold_eval: float = 0.5):
+    """
+    Update the q_pruned MLP parameters using hard-thresholded masks from masked_net.
+    Returns the updated pruned_state dict.
+    """
+    pruned_weights = hard_threshold_params(masked_net, threshold_eval)
+    # print(f"pruned_weights: {pruned_weights}")
+
+
+    # For hidden layers: convert list of dicts to dict of dicts keyed by index (optional)
+    hidden_layers_dict = {i: layer for i, layer in enumerate(pruned_weights["hidden_layers"])}
+
+    # Merge with output layer
+    pruned_state = {
+        "hidden_layers": hidden_layers_dict,
+        "output_layer": pruned_weights["output_layer"]
+    }
+    return pruned_state
+
+# ---------------------------
+# (5) Training loop
 # ---------------------------
 from functools import partial
 from tqdm import tqdm
 import optax
 from debug_helper import compare_q_states, compare_mask_states
 from rl_blox.logging.logger import AIMLogger
+
+eval_steps = 100
 
 hparams_algorithm = dict(
     batch_size=128,
@@ -331,6 +388,8 @@ def train_step_with_loss(
 train_step = partial(train_step_with_loss, subnetwork_loss)
 train_step = partial(nnx.jit, static_argnames=("lam",))(train_step)
 
+q_pruned = MLP(rngs=nnx.Rngs(seed), **hparams_model)
+
 
 # Train mask
 for step in tqdm(range(1, hparams_algorithm.get("total_timesteps") + 1), desc="Training"):
@@ -359,6 +418,26 @@ for step in tqdm(range(1, hparams_algorithm.get("total_timesteps") + 1), desc="T
         print(f"step={step} loss={loss_val:.6f} q_diff_loss={metrics['q_diff_loss']:.6f} "
               f"sparsity_loss={metrics['sparsity_loss']:.6f} sparsity@{threshold_eval}={metrics['hard_sparsity']:.6f}")
 
+    # extract and evaluate subnet
+    if step % eval_steps== 0:
+        # key, subkey = jr.split(key)
+        pruned_state = get_pruned_state(masked_net, threshold_eval)
+        # Update the new MLP with pruned parameters
+        nnx.update(q_pruned, pruned_state)
+        
+        # Evaluate the subnetwork policy
+        subnet_policy = get_policy_from_q_net(q_pruned)
+        all_task_scores = evaluate_policy_on_task(subnet_policy, task=None, obj_colors=OBJ_COLORS, render_mode="None", seed=seed+1, verbose=False)
+
+        # Log eval result
+        for color, metrics in all_task_scores.items():
+            logger.record_stat(
+                f"{color} avg return", metrics["Avg Return"], step=step + 1
+            )
+            logger.record_stat(
+                f"{color} success rate", metrics["Success Rate"], step=step + 1
+            )
+
     if step % 1 == 0 and step > 10000:
         # early stopping
         if metrics['hard_sparsity'] < 0.4 and metrics['q_diff_loss'] < 1e-2:
@@ -371,56 +450,10 @@ for step in tqdm(range(1, hparams_algorithm.get("total_timesteps") + 1), desc="T
             break
 
 # ---------------------------
-# (5) Extract subnetwork & Evaluate pruned network
+# (6) Extract subnetwork & Evaluate pruned network
 # ---------------------------
-def hard_threshold_params(masked_net, threshold=0.5):
-    """
-    Return a dict of frozen weights with masks hard-thresholded.
-    Works for any MaskedMLP instance (or similar structure).
-    """
-    pruned_weights = {}
-
-    def apply_threshold(layer_params, mask_params):
-        out = {}
-        for name, value in layer_params.items():
-            if name in mask_params:
-                mask = (jax.nn.sigmoid(mask_params[name].value) >= threshold).astype(value.dtype)
-                out[name] = jax.lax.stop_gradient(value * mask)
-            else:
-                out[name] = jax.lax.stop_gradient(value)
-        return out
-
-    pruned_weights["hidden_layers"] = [
-        apply_threshold(lp, mp)
-        for lp, mp in zip(masked_net.frozen_params["hidden_layers"], masked_net.mask_logits["hidden_layers"])
-    ]
-
-    pruned_weights["output_layer"] = apply_threshold(
-        masked_net.frozen_params["output_layer"], masked_net.mask_logits["output_layer"]
-    )
-
-    return pruned_weights
 
 print(f"Pruned network ready, fraction of weights kept: {hard_mask_sparsity(masked_net.mask_logits, threshold_eval):.3f}")
-
-def get_pruned_state(masked_net: MaskedMLP, threshold_eval: float = 0.5):
-    """
-    Update the q_pruned MLP parameters using hard-thresholded masks from masked_net.
-    Returns the updated pruned_state dict.
-    """
-    pruned_weights = hard_threshold_params(masked_net, threshold_eval)
-    # print(f"pruned_weights: {pruned_weights}")
-
-
-    # For hidden layers: convert list of dicts to dict of dicts keyed by index (optional)
-    hidden_layers_dict = {i: layer for i, layer in enumerate(pruned_weights["hidden_layers"])}
-
-    # Merge with output layer
-    pruned_state = {
-        "hidden_layers": hidden_layers_dict,
-        "output_layer": pruned_weights["output_layer"]
-    }
-    return pruned_state
 
 q_pruned = MLP(rngs=nnx.Rngs(seed), **hparams_model)
 
@@ -442,12 +475,12 @@ print(f"Saved {subtask} subnetwork checkpoint.")
 
 # Evaluate the subnetwork policy
 subnet_policy = get_policy_from_q_net(q_pruned)
-# evaluate_policy_on_task(subnet_policy, task=subtask, obj_colors=OBJ_COLORS, render_mode="None", seed=seed+1)
-evaluate_policy_on_task(subnet_policy, task=None, obj_colors=OBJ_COLORS, render_mode="None", seed=seed+1)
+# _ = evaluate_policy_on_task(subnet_policy, task=subtask, obj_colors=OBJ_COLORS, render_mode="None", seed=seed+1)
+_ = evaluate_policy_on_task(subnet_policy, task=None, obj_colors=OBJ_COLORS, render_mode="None", seed=seed+1)
 
 # For comparison
 print("evaluate original q network")
-evaluate_policy_on_task(policy, task=None, obj_colors=OBJ_COLORS, render_mode="None", seed=seed+2)
+_ = evaluate_policy_on_task(policy, task=None, obj_colors=OBJ_COLORS, render_mode="None", seed=seed+2)
 # ---------------------------
 # Run interactive demo
 # ---------------------------
