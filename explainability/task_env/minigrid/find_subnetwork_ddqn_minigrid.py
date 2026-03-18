@@ -191,7 +191,6 @@ def soft_mask_sparsity(masks: dict) -> jnp.ndarray:
     # combine all sums
     return jnp.sum(hidden_sums) + jnp.sum(output_sums)
 
-# import jax.nn as jnn
 def q_diff_loss(masked_net: MaskedMLP, q_net: MLP, state):
     """
     Loss is the mean squared difference between original Q and masked Q
@@ -333,17 +332,7 @@ train_step = partial(train_step_with_loss, subnetwork_loss)
 train_step = partial(nnx.jit, static_argnames=("lam",))(train_step)
 
 
-# Train
-# if logger is not None:
-#     logger.start_new_episode()
-
-# if bar is None:
-#     progress = trange(
-#         global_step, total_timesteps, disable=not progress_bar
-#     )
-# else:
-#     progress = bar
-
+# Train mask
 for step in tqdm(range(1, hparams_algorithm.get("total_timesteps") + 1), desc="Training"):
     key, subkey = jr.split(key)
     state = sample_state(env, subtask, hparams_algorithm.get("batch_size"), key=subkey)
@@ -382,7 +371,7 @@ for step in tqdm(range(1, hparams_algorithm.get("total_timesteps") + 1), desc="T
             break
 
 # ---------------------------
-# (5) Extract subnetwork
+# (5) Extract subnetwork & Evaluate pruned network
 # ---------------------------
 def hard_threshold_params(masked_net, threshold=0.5):
     """
@@ -413,20 +402,29 @@ def hard_threshold_params(masked_net, threshold=0.5):
     return pruned_weights
 
 print(f"Pruned network ready, fraction of weights kept: {hard_mask_sparsity(masked_net.mask_logits, threshold_eval):.3f}")
-pruned_weights = hard_threshold_params(masked_net, threshold_eval)
-# print(f"pruned_weights: {pruned_weights}")
+
+def get_pruned_state(masked_net: MaskedMLP, threshold_eval: float = 0.5):
+    """
+    Update the q_pruned MLP parameters using hard-thresholded masks from masked_net.
+    Returns the updated pruned_state dict.
+    """
+    pruned_weights = hard_threshold_params(masked_net, threshold_eval)
+    # print(f"pruned_weights: {pruned_weights}")
+
+
+    # For hidden layers: convert list of dicts to dict of dicts keyed by index (optional)
+    hidden_layers_dict = {i: layer for i, layer in enumerate(pruned_weights["hidden_layers"])}
+
+    # Merge with output layer
+    pruned_state = {
+        "hidden_layers": hidden_layers_dict,
+        "output_layer": pruned_weights["output_layer"]
+    }
+    return pruned_state
 
 q_pruned = MLP(rngs=nnx.Rngs(seed), **hparams_model)
 
-# For hidden layers: convert list of dicts to dict of dicts keyed by index (optional)
-hidden_layers_dict = {i: layer for i, layer in enumerate(pruned_weights["hidden_layers"])}
-
-# Merge with output layer
-pruned_state = {
-    "hidden_layers": hidden_layers_dict,
-    "output_layer": pruned_weights["output_layer"]
-}
-
+pruned_state = get_pruned_state(masked_net, threshold_eval)
 # Update the new MLP with pruned parameters
 nnx.update(q_pruned, pruned_state)
 
