@@ -441,10 +441,11 @@ for step in tqdm(range(1, hparams_algorithm.get("total_timesteps") + 1), desc="T
             logger.record_stat(
                 f"{color} success rate", eval_metrics["Success Rate"], step=step + 1
             )
-            if q_eval_scores[color]["Success Rate"] != 0:
+            if q_eval_scores[color]["Avg Return"] != 0:
                 logger.record_stat(
                     f"{color} avg return (relative to original q network)", eval_metrics["Avg Return"]/q_eval_scores[color]["Avg Return"], step=step + 1
                 )
+            if q_eval_scores[color]["Success Rate"] != 0:
                 logger.record_stat(
                     f"{color} success rate (relative to original q network)s", eval_metrics["Success Rate"]/q_eval_scores[color]["Success Rate"], step=step + 1
                 )
