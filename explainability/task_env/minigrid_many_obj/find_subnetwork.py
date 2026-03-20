@@ -1,5 +1,6 @@
+import os
 from minigrid.core.constants import COLOR_NAMES, COLOR_TO_IDX
-from minigrid_one_context_env import make_ocean_env
+from find_many_objects_env import make_ocean_env
 
 import jax
 import flax.nnx as nnx
@@ -15,16 +16,15 @@ load_final_mask = not train_mask
 # ---------------------------
 # (1) Load trained network
 # ---------------------------
-import pickle
+import orbax.checkpoint as ocp
 from rl_blox.blox.function_approximator.mlp import MLP
 
-
 # Set up environment to get input/output shapes
-OBJ_COLORS = ["red", "green", "blue"]
+OBJ_COLORS = COLOR_NAMES
 # subtask = None
-subtask = "green"
+subtask = "red"
 env_name = f"ocean_{subtask}_simple"
-env = make_ocean_env(target_color=subtask, obj_colors=OBJ_COLORS)
+env = make_ocean_env(subtask)
 
 # Recreate MLP with same architecture as training
 hparams_model = dict(
@@ -34,21 +34,20 @@ hparams_model = dict(
     hidden_nodes=[128, 128],
 )
 
+# Restore q net from checkpoint
 abstract_mlp = MLP(rngs=nnx.Rngs(seed), **hparams_model)
 graphdef, abstract_state = nnx.split(abstract_mlp)
 
-# restore q net from checkpoint
-ckpt_path = "ddqn_minigrid_ckpt.pkl"
+file_name = "minigrid_reefshield_medium_DDQN-UTS_1773420833.4308155_q_step_001000000_epoch_1000000"
+ckpt_path = os.path.expanduser(
+        f"~/workspace/XRL/ocean_trained_model/XRL_MINIGRID_POLICY/UTS/seed_48/{file_name}"
+    )
 
-with open(ckpt_path, "rb") as f:
-    mlp_state = pickle.load(f)
+checkpointer = ocp.StandardCheckpointer()
+restored_model = checkpointer.restore(ckpt_path, abstract_state)
+q = nnx.merge(graphdef, restored_model)
 
 print("Loaded model checkpoint.")
-
-
-# Restore parameters from checkpoint
-# nnx.update(q_net, mlp_state)
-q = nnx.merge(graphdef, mlp_state)
 
 
 def get_policy_from_q_net(q):
@@ -76,8 +75,8 @@ def evaluate_policy_on_task(policy, task=None, obj_colors=OBJ_COLORS, render_mod
     for target_color in task:
         assert target_color in COLOR_NAMES
 
-        eval_env = make_ocean_env(target_color, obj_colors, render_mode)
-        task_score_info = eval_policy(target_color, eval_env, policy, verbose=verbose, num_episode=100, seed=seed)
+        eval_env = make_ocean_env(target_color, render_mode)
+        task_score_info = eval_policy(target_color, eval_env, policy, verbose=verbose, num_episode=10, seed=seed)
         eval_env.close()
 
         all_task_scores.update(task_score_info)
@@ -337,12 +336,12 @@ def sample_state(env, subtask=None, batch_size=128, key=jr.PRNGKey(seed)):
     state = jax.random.randint(
         subkey,
         shape=(batch_size, low.shape[0]),
-        minval=0,
-        maxval=7,
+        minval=low,
+        maxval=high,
     )
     # jax.debug.print("state={state}", state=state)
 
-    obj_colors = env.obj_colors
+    obj_colors = OBJ_COLORS
 
     if subtask is None:
         # Sample all subtasks
@@ -440,12 +439,13 @@ for step in tqdm(range(1, hparams_algorithm.get("total_timesteps") + 1), desc="T
             logger.record_stat(
                 f"{color} success rate", eval_metrics["Success Rate"], step=step + 1
             )
-            logger.record_stat(
-                f"{color} avg return (relative to original q network)", eval_metrics["Avg Return"]/q_eval_scores[color]["Avg Return"], step=step + 1
-            )
-            logger.record_stat(
-                f"{color} success rate (relative to original q network)s", eval_metrics["Success Rate"]/q_eval_scores[color]["Success Rate"], step=step + 1
-            )
+            if q_eval_scores[color]["Success Rate"] != 0:
+                logger.record_stat(
+                    f"{color} avg return (relative to original q network)", eval_metrics["Avg Return"]/q_eval_scores[color]["Avg Return"], step=step + 1
+                )
+                logger.record_stat(
+                    f"{color} success rate (relative to original q network)s", eval_metrics["Success Rate"]/q_eval_scores[color]["Success Rate"], step=step + 1
+                )
 
     if step % 1 == 0 and step > 10000:
         # early stopping
@@ -482,8 +482,18 @@ subnetwork_state = nnx.state(q_pruned)
 # jax.debug.print("-----------------q_pruned check-----------------")
 compare_q_states(q, q_pruned, pruned=True)
 
-with open(f"ddqn_subnet_{subtask}_ckpt.pkl", "wb") as f:
-    pickle.dump(subnetwork_state, f)
+# Save subnetwork
+checkpointer = ocp.StandardCheckpointer()
+
+step = int(file_name.split("_")[-3])
+ckpt_save_path = os.path.expanduser(
+        f"~/workspace/XRL/ocean_subnet/XRL_MINIGRID_POLICY/UTS/seed_48/step_{step}/subnetwork_{subtask}"
+    )
+
+checkpointer.save(
+    ckpt_save_path,
+    subnetwork_state
+)
 print(f"Saved {subtask} subnetwork checkpoint.")
 
 # Evaluate the subnetwork policy
@@ -496,15 +506,21 @@ logger.run.log_info(f"{subnet_eval_scores}")
 # For comparison
 print("evaluate original q network")
 _ = evaluate_policy_on_task(policy, task=None, obj_colors=OBJ_COLORS, render_mode="None", seed=seed+2)
+
 # ---------------------------
 # Run interactive demo
 # ---------------------------
+import random
 
-eval_env = make_ocean_env(target_color=None, obj_colors=OBJ_COLORS, render_mode="human")
-obs, _ = eval_env.reset(seed=seed+3)
+task = random.choice(OBJ_COLORS)
+eval_env = make_ocean_env(task, render_mode="human")
+obs, _ = eval_env.reset()
 while True:
     action = subnet_policy(obs)
     obs, reward, terminated, truncated, info = eval_env.step(action)
     if terminated or truncated:
-        print(f"{eval_env.current_task_color} reward: {reward}")
-        obs, _ = eval_env.reset(seed=seed+4)
+        print(f"{task} reward: {reward}")
+        eval_env.close()
+        task = random.choice(OBJ_COLORS)
+        eval_env = make_ocean_env(task, render_mode="human")
+        obs, _ = eval_env.reset()
