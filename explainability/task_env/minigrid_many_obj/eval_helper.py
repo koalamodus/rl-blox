@@ -43,7 +43,7 @@ def get_policy_from_checkpoint(path, env):
     abstract_mlp = MLP(
         int(env.observation_space.shape[0]),
         int(env.action_space.n),
-        [128, 128],
+        [32, 32],
         "relu",
         nnx.Rngs(0),
     )

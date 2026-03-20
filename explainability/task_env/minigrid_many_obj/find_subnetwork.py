@@ -10,8 +10,6 @@ import jax.random as jr
 seed = 10  # random seed for np and jax
 key = jr.PRNGKey(seed)
 
-randomize_env = False
-
 train_mask = True
 save_final_mask = train_mask
 load_final_mask = not train_mask
@@ -33,16 +31,27 @@ hparams_model = dict(
     n_features=env.observation_space.shape[0],
     n_outputs=int(env.action_space.n),
     activation="relu",
-    hidden_nodes=[128, 128],
+    hidden_nodes=[32, 32],
 )
 
 # Restore q net from checkpoint
 abstract_mlp = MLP(rngs=nnx.Rngs(seed), **hparams_model)
 graphdef, abstract_state = nnx.split(abstract_mlp)
 
-experiment = "XRL_MINIGRID_POLICY"
-seed_num = 48
-file_name = "minigrid_reefshield_medium_DDQN-UTS_1773420833.4308155_q_step_001000000_epoch_1000000"
+experiment = "reefshield_random_medium"
+randomize_env = True
+seed_num = 0
+file_name = "_minigrid_reefshield_random_medium_DDQN-UTS_1773787402.9864454_q_step_005000000_epoch_5000000"
+
+# experiment = "reefshield_fixed_medium"
+# randomize_env = False
+# seed_num = 0
+# file_name = "_minigrid_reefshield_fixed_medium_DDQN-UTS_1773675569.892775_q_step_001000000_epoch_1000000"
+
+# experiment = "XRL_MINIGRID_POLICY"
+# randomize_env = False
+# seed_num = 48
+# file_name = "minigrid_reefshield_medium_DDQN-UTS_1773420833.4308155_q_step_001000000_epoch_1000000"
 ckpt_path = os.path.expanduser(
         f"~/workspace/XRL/ocean_trained_model/{experiment}/UTS/seed_{seed_num}/{file_name}"
     )
@@ -66,9 +75,10 @@ def get_policy_from_q_net(q):
 
 policy = get_policy_from_q_net(q)
 
+eval_num_episode = 100 if randomize_env else 1
 
 from eval_helper import eval_policy
-def evaluate_policy_on_task(policy, task=None, obj_colors=OBJ_COLORS, randomize=randomize_env, num_episode=1, render_mode=None, seed=42, verbose=True):
+def evaluate_policy_on_task(policy, task=None, obj_colors=OBJ_COLORS, randomize=randomize_env, num_episode=eval_num_episode, render_mode=None, seed=42, verbose=True):
     if task == None:
         task = obj_colors
     else:
@@ -425,7 +435,7 @@ for step in tqdm(range(1, hparams_algorithm.get("total_timesteps") + 1), desc="T
     #           f"sparsity_loss={training_metrics['sparsity_loss']:.6f} sparsity@{threshold_eval}={training_metrics['hard_sparsity']:.6f}")
 
     # extract and evaluate subnet
-    if step % eval_steps== 0:
+    if step % eval_steps == 0: # and training_metrics['hard_sparsity'] < 1.0:
         # key, subkey = jr.split(key)
         pruned_state = get_pruned_state(masked_net, threshold_eval)
         # Update the new MLP with pruned parameters
