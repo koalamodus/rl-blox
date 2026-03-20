@@ -9,10 +9,9 @@ from rl_blox.blox.function_approximator.mlp import MLP
 
 def eval_policy(color, env, policy, verbose=False, num_episode=1, seed=42):
     task_score_info = {}
-    sum_ep_reward = 0.0
+    sum_reward = 0.0
     num_task_success = 0.0
     for _ in range(num_episode):
-        ep_reward = 0.0
         obs, _ = env.reset(seed=seed)
         terminated = truncated = False
 
@@ -21,18 +20,16 @@ def eval_policy(color, env, policy, verbose=False, num_episode=1, seed=42):
             # print(f"action: {action}")
             obs, reward, terminated, truncated, _ = env.step(action)
             # jax.debug.print("obs={obs}", obs=obs)
-            ep_reward += reward
+            sum_reward += reward
             if reward > 0.0:
                 num_task_success += 1
-            sum_ep_reward += ep_reward
 
     task_score_info.update({
         f"Task {color}": {
-            "Avg Return": sum_ep_reward / num_episode,
+            "Avg Return": sum_reward / num_episode,
             "Success Rate": num_task_success / num_episode
         }
     })
-    # task_score_info.update({f"Task {color}": ep_reward})
 
     if verbose:
         print(task_score_info)
