@@ -12,6 +12,8 @@ from eval_helper import (
 
 def eval_all_checkpoints(
     base,
+    randomize,
+    num_episode,
 ) -> None:
     all_ckpts = get_all_checkpoints(base)
     all_ckpt_results = {}
@@ -24,8 +26,8 @@ def eval_all_checkpoints(
 
         policy = get_policy_from_checkpoint(path, env)
         for color in COLOR_NAMES:
-            eval_env = make_ocean_env(color=color, render_mode=None)
-            result = eval_policy(color, eval_env, policy, verbose=False)
+            eval_env = make_ocean_env(color=color, randomize=randomize, render_mode=None)
+            result = eval_policy(color, eval_env, policy, verbose=False, num_episode=num_episode)
 
 
             ckpt_result.update(result)
@@ -49,7 +51,19 @@ def print_eval_results(all_results):
     print("\n==========================")
 
 
-seeds = [48]
+# experiment = "XRL_MINIGRID_POLICY"
+# randomize_env = False
+# seeds = [48]
+
+# experiment = "reefshield_fixed_medium"
+# randomize_env = False
+# seeds = [0, 1, 2]
+
+experiment = "reefshield_random_medium"
+randomize_env = True
+seeds = range(10)
+
+num_episode = 100 if randomize_env else 1
 
 env = make_ocean_env(color="red", render_mode="human")
 
@@ -57,8 +71,10 @@ for seed in seeds:
     print(f"Evaluating seed {seed}.")
     
     base = os.path.expanduser(
-        f"~/workspace/XRL/ocean_trained_model/XRL_MINIGRID_POLICY/UTS/seed_{seed}/"
+        f"~/workspace/XRL/ocean_trained_model/{experiment}/UTS/seed_{seed}/"
     )
     eval_all_checkpoints(
         base,
+        randomize_env,
+        num_episode,
     )
