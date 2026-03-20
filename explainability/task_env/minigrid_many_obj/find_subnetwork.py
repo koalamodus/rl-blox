@@ -40,9 +40,11 @@ hparams_model = dict(
 abstract_mlp = MLP(rngs=nnx.Rngs(seed), **hparams_model)
 graphdef, abstract_state = nnx.split(abstract_mlp)
 
+experiment = "XRL_MINIGRID_POLICY"
+seed_num = 48
 file_name = "minigrid_reefshield_medium_DDQN-UTS_1773420833.4308155_q_step_001000000_epoch_1000000"
 ckpt_path = os.path.expanduser(
-        f"~/workspace/XRL/ocean_trained_model/XRL_MINIGRID_POLICY/UTS/seed_48/{file_name}"
+        f"~/workspace/XRL/ocean_trained_model/{experiment}/UTS/seed_{seed_num}/{file_name}"
     )
 
 checkpointer = ocp.StandardCheckpointer()
