@@ -10,6 +10,8 @@ import jax.random as jr
 seed = 10  # random seed for np and jax
 key = jr.PRNGKey(seed)
 
+randomize_env = False
+
 train_mask = True
 save_final_mask = train_mask
 load_final_mask = not train_mask
@@ -64,7 +66,7 @@ policy = get_policy_from_q_net(q)
 
 
 from eval_helper import eval_policy
-def evaluate_policy_on_task(policy, task=None, obj_colors=OBJ_COLORS, render_mode="human", seed=42, verbose=True):
+def evaluate_policy_on_task(policy, task=None, obj_colors=OBJ_COLORS, randomize=randomize_env, num_episode=1, render_mode=None, seed=42, verbose=True):
     if task == None:
         task = obj_colors
     else:
@@ -75,21 +77,21 @@ def evaluate_policy_on_task(policy, task=None, obj_colors=OBJ_COLORS, render_mod
     for target_color in task:
         assert target_color in COLOR_NAMES
 
-        eval_env = make_ocean_env(target_color, render_mode)
-        task_score_info = eval_policy(target_color, eval_env, policy, verbose=verbose, num_episode=10, seed=seed)
+        eval_env = make_ocean_env(target_color, randomize, render_mode)
+        task_score_info = eval_policy(target_color, eval_env, policy, verbose=verbose, num_episode=num_episode, seed=seed)
         eval_env.close()
 
         all_task_scores.update(task_score_info)
     return all_task_scores
 
 print("evaluate original q network")
-q_eval_scores = evaluate_policy_on_task(policy, task=None, obj_colors=OBJ_COLORS, render_mode="None", seed=seed)
+q_eval_scores = evaluate_policy_on_task(policy, seed=seed)
 
 q_copy = nnx.clone(q)
 # # evaluate_policy(env_name, q_copy)
 # print("evaluate q_copy network")
 # policy_copy = get_policy_from_q_net(q_copy)
-# _ = evaluate_policy_on_task(policy_copy, task=subtask, obj_colors=OBJ_COLORS, render_mode="None")
+# _ = evaluate_policy_on_task(policy_copy, task=subtask)
 
 # ---------------------------
 # (2) Define masked network
@@ -429,7 +431,7 @@ for step in tqdm(range(1, hparams_algorithm.get("total_timesteps") + 1), desc="T
         
         # Evaluate the subnetwork policy
         subnet_policy = get_policy_from_q_net(q_pruned)
-        all_task_scores = evaluate_policy_on_task(subnet_policy, task=None, obj_colors=OBJ_COLORS, render_mode="None", seed=seed+1, verbose=False)
+        all_task_scores = evaluate_policy_on_task(subnet_policy, seed=seed+1, verbose=False)
 
         # Log eval result
         for color, eval_metrics in all_task_scores.items():
@@ -498,14 +500,14 @@ print(f"Saved {subtask} subnetwork checkpoint.")
 
 # Evaluate the subnetwork policy
 subnet_policy = get_policy_from_q_net(q_pruned)
-# _ = evaluate_policy_on_task(subnet_policy, task=subtask, obj_colors=OBJ_COLORS, render_mode="None", seed=seed+1)
-subnet_eval_scores = evaluate_policy_on_task(subnet_policy, task=None, obj_colors=OBJ_COLORS, render_mode="None", seed=seed+1)
+# _ = evaluate_policy_on_task(subnet_policy, task=subtask, seed=seed+1)
+subnet_eval_scores = evaluate_policy_on_task(subnet_policy, seed=seed+1)
 logger.run.log_info(f"evaluate pruned subnetwork {subtask}")
 logger.run.log_info(f"{subnet_eval_scores}")
 
 # For comparison
 print("evaluate original q network")
-_ = evaluate_policy_on_task(policy, task=None, obj_colors=OBJ_COLORS, render_mode="None", seed=seed+2)
+_ = evaluate_policy_on_task(policy, seed=seed+2)
 
 # ---------------------------
 # Run interactive demo
@@ -513,7 +515,7 @@ _ = evaluate_policy_on_task(policy, task=None, obj_colors=OBJ_COLORS, render_mod
 import random
 
 task = random.choice(OBJ_COLORS)
-eval_env = make_ocean_env(task, render_mode="human")
+eval_env = make_ocean_env(task, randomize=randomize_env, render_mode="human")
 obs, _ = eval_env.reset()
 while True:
     action = subnet_policy(obs)
@@ -522,5 +524,5 @@ while True:
         print(f"{task} reward: {reward}")
         eval_env.close()
         task = random.choice(OBJ_COLORS)
-        eval_env = make_ocean_env(task, render_mode="human")
+        eval_env = make_ocean_env(task, randomize=randomize_env, render_mode="human")
         obs, _ = eval_env.reset()

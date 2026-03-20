@@ -239,7 +239,7 @@ class FlatContextObsWrapper(ObservationWrapper):
 
         return obs
 
-def make_ocean_env(color: str = "None", randomize=True ,render_mode = None):    
+def make_ocean_env(color: str = "None", randomize = True ,render_mode = None):    
     env = FlatContextObsWrapper(
         FindManyObjectsEnv(
             color,
