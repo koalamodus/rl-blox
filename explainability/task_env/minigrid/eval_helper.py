@@ -28,7 +28,7 @@ def eval_policy(color, env, policy, verbose=False, num_episode=1, seed=42):
 
     task_score_info.update({
         f"Task {color}": {
-            "Return": sum_ep_reward / num_episode,
+            "Avg Return": sum_ep_reward / num_episode,
             "Success Rate": num_task_success / num_episode
         }
     })

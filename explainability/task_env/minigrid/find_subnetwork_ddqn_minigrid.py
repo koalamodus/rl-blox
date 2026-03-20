@@ -398,25 +398,25 @@ for step in tqdm(range(1, hparams_algorithm.get("total_timesteps") + 1), desc="T
     lam = sparsity_schedule(step, hparams_algorithm.get("lambda_start"), hparams_algorithm.get("lambda_end"),
                             hparams_algorithm.get("learning_starts"), hparams_algorithm.get("total_timesteps"))
 
-    loss_val, metrics = train_step(optimizer, masked_net, q, state, lam)
+    loss_val, training_metrics = train_step(optimizer, masked_net, q, state, lam)
 
     if logger is not None:
         logger.record_stat(
-            "q diff loss", metrics['q_diff_loss'], step=step + 1
+            "q diff loss", training_metrics['q_diff_loss'], step=step + 1
         )
         logger.record_stat(
-            "sparsity loss", metrics['sparsity_loss'], step=step + 1
+            "sparsity loss", training_metrics['sparsity_loss'], step=step + 1
         )
         logger.record_stat(
-            "soft sparsity", metrics['soft_sparsity'], step=step + 1
+            "soft sparsity", training_metrics['soft_sparsity'], step=step + 1
         )
         logger.record_stat(
-            "hard sparsity", metrics['hard_sparsity'], step=step + 1
+            "hard sparsity", training_metrics['hard_sparsity'], step=step + 1
         )
 
-    if step % 1000 == 0:
-        print(f"step={step} loss={loss_val:.6f} q_diff_loss={metrics['q_diff_loss']:.6f} "
-              f"sparsity_loss={metrics['sparsity_loss']:.6f} sparsity@{threshold_eval}={metrics['hard_sparsity']:.6f}")
+    # if step % 1000 == 0:
+    #     print(f"step={step} loss={loss_val:.6f} q_diff_loss={training_metrics['q_diff_loss']:.6f} "
+    #           f"sparsity_loss={training_metrics['sparsity_loss']:.6f} sparsity@{threshold_eval}={training_metrics['hard_sparsity']:.6f}")
 
     # extract and evaluate subnet
     if step % eval_steps== 0:
@@ -430,19 +430,21 @@ for step in tqdm(range(1, hparams_algorithm.get("total_timesteps") + 1), desc="T
         all_task_scores = evaluate_policy_on_task(subnet_policy, task=None, obj_colors=OBJ_COLORS, render_mode="None", seed=seed+1, verbose=False)
 
         # Log eval result
-        for color, metrics in all_task_scores.items():
+        for color, eval_metrics in all_task_scores.items():
             logger.record_stat(
-                f"{color} avg return", metrics["Avg Return"], step=step + 1
+                f"{color} avg return", eval_metrics["Avg Return"], step=step + 1
             )
             logger.record_stat(
-                f"{color} success rate", metrics["Success Rate"], step=step + 1
+                f"{color} success rate", eval_metrics["Success Rate"], step=step + 1
             )
 
     if step % 1 == 0 and step > 10000:
         # early stopping
-        if metrics['hard_sparsity'] < 0.4 and metrics['q_diff_loss'] < 1e-2:
-            print(f"step={step} loss={loss_val:.6f} q_diff_loss={metrics['q_diff_loss']:.6f} "
-              f"sparsity_loss={metrics['sparsity_loss']:.6f} sparsity@{threshold_eval}={metrics['hard_sparsity']:.6f}")
+        if training_metrics['hard_sparsity'] < 0.4 and training_metrics['q_diff_loss'] < 1e-2:
+            print(f"step={step} loss={loss_val:.6f} q_diff_loss={training_metrics['q_diff_loss']:.6f} "
+              f"sparsity_loss={training_metrics['sparsity_loss']:.6f} sparsity@{threshold_eval}={training_metrics['hard_sparsity']:.6f}")
+            
+            
             # jax.debug.print("-----------------q_net check-----------------")
             compare_q_states(q, q_copy)
             # jax.debug.print("-----------------masked_net check-----------------")
