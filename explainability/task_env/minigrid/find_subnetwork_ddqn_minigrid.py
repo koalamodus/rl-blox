@@ -84,7 +84,7 @@ def evaluate_policy_on_task(policy, task=None, obj_colors=OBJ_COLORS, render_mod
     return all_task_scores
 
 print("evaluate original q network")
-_ = evaluate_policy_on_task(policy, task=None, obj_colors=OBJ_COLORS, render_mode="None", seed=seed)
+q_eval_scores = evaluate_policy_on_task(policy, task=None, obj_colors=OBJ_COLORS, render_mode="None", seed=seed)
 
 q_copy = nnx.clone(q)
 # # evaluate_policy(env_name, q_copy)
@@ -319,6 +319,9 @@ logger.define_experiment(
     hparams=hparams_model | hparams_algorithm,
 )
 
+logger.run.log_info("evaluate original q network")
+logger.run.log_info(f"{q_eval_scores}")
+
 threshold_eval = hparams_algorithm.get("threshold_eval")
 optimizer = nnx.Optimizer(masked_net, optax.adam(hparams_algorithm.pop("learning_rate")), wrt=nnx.Param)
 
@@ -437,6 +440,12 @@ for step in tqdm(range(1, hparams_algorithm.get("total_timesteps") + 1), desc="T
             logger.record_stat(
                 f"{color} success rate", eval_metrics["Success Rate"], step=step + 1
             )
+            logger.record_stat(
+                f"{color} avg return (relative to original q network)", eval_metrics["Avg Return"]/q_eval_scores[color]["Avg Return"], step=step + 1
+            )
+            logger.record_stat(
+                f"{color} success rate (relative to original q network)s", eval_metrics["Success Rate"]/q_eval_scores[color]["Success Rate"], step=step + 1
+            )
 
     if step % 1 == 0 and step > 10000:
         # early stopping
@@ -444,6 +453,8 @@ for step in tqdm(range(1, hparams_algorithm.get("total_timesteps") + 1), desc="T
             print(f"step={step} loss={loss_val:.6f} q_diff_loss={training_metrics['q_diff_loss']:.6f} "
               f"sparsity_loss={training_metrics['sparsity_loss']:.6f} sparsity@{threshold_eval}={training_metrics['hard_sparsity']:.6f}")
             
+            logger.run.log_info(f"evaluate subnetwork {subtask}")
+            logger.run.log_info(f"{all_task_scores}")
             
             # jax.debug.print("-----------------q_net check-----------------")
             compare_q_states(q, q_copy)
@@ -478,7 +489,9 @@ print(f"Saved {subtask} subnetwork checkpoint.")
 # Evaluate the subnetwork policy
 subnet_policy = get_policy_from_q_net(q_pruned)
 # _ = evaluate_policy_on_task(subnet_policy, task=subtask, obj_colors=OBJ_COLORS, render_mode="None", seed=seed+1)
-_ = evaluate_policy_on_task(subnet_policy, task=None, obj_colors=OBJ_COLORS, render_mode="None", seed=seed+1)
+subnet_eval_scores = evaluate_policy_on_task(subnet_policy, task=None, obj_colors=OBJ_COLORS, render_mode="None", seed=seed+1)
+logger.run.log_info(f"evaluate pruned subnetwork {subtask}")
+logger.run.log_info(f"{subnet_eval_scores}")
 
 # For comparison
 print("evaluate original q network")
