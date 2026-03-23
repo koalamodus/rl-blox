@@ -514,7 +514,7 @@ checkpointer = ocp.StandardCheckpointer()
 
 step = int(file_name.split("_")[-3])
 ckpt_save_path = os.path.expanduser(
-        f"~/workspace/XRL/ocean_subnet/XRL_MINIGRID_POLICY/UTS/seed_48/step_{step}/subnetwork_{subtask}"
+        f"~/workspace/XRL/ocean_subnet/{experiment}/UTS/seed_{seed_num}/step_{step}/subnetwork_{subtask}"
     )
 
 checkpointer.save(
