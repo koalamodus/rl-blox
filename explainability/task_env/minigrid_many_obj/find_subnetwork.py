@@ -7,7 +7,7 @@ import flax.nnx as nnx
 import jax.numpy as jnp
 import jax.random as jr
 
-seed = 10  # random seed for np and jax
+seed = 49  # random seed for np and jax
 key = jr.PRNGKey(seed)
 
 train_mask = True
@@ -325,6 +325,8 @@ logger.define_experiment(
     algorithm_name="DDQN_pruning",
     hparams=hparams_model | hparams_algorithm,
 )
+
+logger.run.log_info(f"random seed: {seed}")
 
 logger.run.log_info("evaluate original q network")
 logger.run.log_info(f"{q_eval_scores}")
