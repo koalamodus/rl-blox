@@ -389,10 +389,21 @@ def sample_state(env, subtask=None, batch_size=128, key=jr.PRNGKey(seed)):
     else:
         raise RuntimeError(f"Unknown subtask: {subtask}")
 
-    # broadcast to batch
-    context_batch = jnp.full((batch_size,), context)
-    # Replace the last elements of every row in `state`
-    state = state.at[:, -1].set(context_batch)
+    # Dezimal context 
+    # # broadcast to batch
+    # context_batch = jnp.full((batch_size,), context)
+    # # Replace the last elements of every row in `state`
+    # state = state.at[:, -1].set(context_batch)
+
+    # One-hot context
+    one_hot_length = 6
+    one_hot_context = jnp.zeros(one_hot_length)
+    one_hot_context = one_hot_context.at[context].set(1)  # JAX-friendly
+
+    # Broadcast the one-hot context to the batch
+    # Replace the last 6 elements of every row in `state`
+    state = state.at[:, -one_hot_length:].set(one_hot_context)
+
     # jax.debug.print("state={state}", state=state)
     # jax.debug.print("-------------")
 
