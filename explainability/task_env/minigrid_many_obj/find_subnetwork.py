@@ -75,7 +75,7 @@ def get_policy_from_q_net(q):
 
 policy = get_policy_from_q_net(q)
 
-eval_num_episode = 100 if randomize_env else 1
+eval_num_episode = 10 if randomize_env else 1
 
 from eval_helper import eval_policy
 def evaluate_policy_on_task(policy, task=None, obj_colors=OBJ_COLORS, randomize=randomize_env, num_episode=eval_num_episode, render_mode=None, seed=42, verbose=True):
@@ -311,14 +311,14 @@ import optax
 from debug_helper import compare_q_states, compare_mask_states
 from rl_blox.logging.logger import AIMLogger
 
-eval_steps = 100
+eval_steps = 10
 
 hparams_algorithm = dict(
     batch_size=128,
-    total_timesteps=100_000,
-    learning_rate=0.0001,
-    # learning_rate_start=2e-3,
-    # learning_rate_end=1e-4,
+    total_timesteps=1_000,
+    learning_rate=1e-4,
+    learning_rate_start=1e-3,
+    learning_rate_end=1e-6,
     learning_starts=3_000,
     lambda_start= 1e-8,
     lambda_end= 1e-8,
@@ -336,7 +336,19 @@ logger.run.log_info("evaluate original q network")
 logger.run.log_info(f"{q_eval_scores}")
 
 threshold_eval = hparams_algorithm.get("threshold_eval")
-optimizer = nnx.Optimizer(masked_net, optax.adam(hparams_algorithm.pop("learning_rate")), wrt=nnx.Param)
+
+# Set learning rate, use either scheduler or a constant value
+lr_constant = hparams_algorithm.pop("learning_rate")
+lr_schedule_fn = optax.linear_schedule(
+   init_value=hparams_algorithm.pop("learning_rate_start"), end_value=hparams_algorithm.pop("learning_rate_end"), transition_steps=hparams_algorithm.get("total_timesteps"))
+
+# lr = lr_constant
+lr = lr_schedule_fn
+
+# Initialise optimiser
+optimizer = nnx.Optimizer(
+    masked_net, optax.adam(learning_rate=lr), wrt=nnx.Param
+)
 
 def sample_state(env, subtask=None, batch_size=128, key=jr.PRNGKey(seed)):
     # Get the observation space bounds
