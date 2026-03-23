@@ -19,11 +19,36 @@ load_final_mask = not train_mask
 import orbax.checkpoint as ocp
 from rl_blox.blox.function_approximator.mlp import MLP
 
+# Choose ckpt
+
+experiment = "reefshield_random_medium"
+randomize_env = True
+seed_num = 0
+file_name = "_minigrid_reefshield_random_medium_DDQN-UTS_1773787402.9864454_q_step_005000000_epoch_5000000"
+model_hidden_nodes = [32, 32]
+
+# experiment = "reefshield_fixed_medium"
+# randomize_env = False
+# seed_num = 0
+# file_name = "_minigrid_reefshield_fixed_medium_DDQN-UTS_1773675569.892775_q_step_001000000_epoch_1000000"
+# model_hidden_nodes = [32, 32]
+
+# experiment = "XRL_MINIGRID_POLICY"
+# randomize_env = False
+# seed_num = 48
+# file_name = "minigrid_reefshield_medium_DDQN-UTS_1773420833.4308155_q_step_001000000_epoch_1000000"
+# model_hidden_nodes = [128, 128]
+
+# Set up ckpt path
+ckpt_path = os.path.expanduser(
+    f"~/workspace/XRL/ocean_trained_model/{experiment}/UTS/seed_{seed_num}/{file_name}"
+)
+
 # Set up environment to get input/output shapes
 OBJ_COLORS = COLOR_NAMES
 # subtask = None
 subtask = "red"
-env_name = f"ocean_{subtask}_simple"
+env_name = f"ocean_{subtask}_{experiment}"
 env = make_ocean_env(subtask)
 
 # Recreate MLP with same architecture as training
@@ -31,30 +56,13 @@ hparams_model = dict(
     n_features=env.observation_space.shape[0],
     n_outputs=int(env.action_space.n),
     activation="relu",
-    hidden_nodes=[32, 32],
+    hidden_nodes=model_hidden_nodes,
 )
 
 # Restore q net from checkpoint
 abstract_mlp = MLP(rngs=nnx.Rngs(seed), **hparams_model)
 graphdef, abstract_state = nnx.split(abstract_mlp)
 
-experiment = "reefshield_random_medium"
-randomize_env = True
-seed_num = 0
-file_name = "_minigrid_reefshield_random_medium_DDQN-UTS_1773787402.9864454_q_step_005000000_epoch_5000000"
-
-# experiment = "reefshield_fixed_medium"
-# randomize_env = False
-# seed_num = 0
-# file_name = "_minigrid_reefshield_fixed_medium_DDQN-UTS_1773675569.892775_q_step_001000000_epoch_1000000"
-
-# experiment = "XRL_MINIGRID_POLICY"
-# randomize_env = False
-# seed_num = 48
-# file_name = "minigrid_reefshield_medium_DDQN-UTS_1773420833.4308155_q_step_001000000_epoch_1000000"
-ckpt_path = os.path.expanduser(
-        f"~/workspace/XRL/ocean_trained_model/{experiment}/UTS/seed_{seed_num}/{file_name}"
-    )
 
 checkpointer = ocp.StandardCheckpointer()
 restored_model = checkpointer.restore(ckpt_path, abstract_state)
