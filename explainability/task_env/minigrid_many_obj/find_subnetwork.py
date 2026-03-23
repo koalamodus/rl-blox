@@ -316,7 +316,6 @@ def get_pruned_state(masked_net: MaskedMLP, threshold_eval: float = 0.5):
 from functools import partial
 from tqdm import tqdm
 import optax
-from debug_helper import compare_q_states, compare_mask_states
 from rl_blox.logging.logger import AIMLogger
 
 eval_steps = 10
@@ -501,11 +500,7 @@ for step in tqdm(range(1, hparams_algorithm.get("total_timesteps") + 1), desc="T
             
             logger.run.log_info(f"evaluate subnetwork {subtask}")
             logger.run.log_info(f"{all_task_scores}")
-            
-            # jax.debug.print("-----------------q_net check-----------------")
-            compare_q_states(q, q_copy)
-            # jax.debug.print("-----------------masked_net check-----------------")
-            compare_mask_states(masked_net, masked_net_copy)
+
             break
 
 # ---------------------------
@@ -524,9 +519,6 @@ nnx.update(q_pruned, pruned_state)
 subnetwork_state = nnx.state(q_pruned)
 # print(f"subnetwork_state is {subnetwork_state}")
 
-
-# jax.debug.print("-----------------q_pruned check-----------------")
-compare_q_states(q, q_pruned, pruned=True)
 
 # Save subnetwork
 checkpointer = ocp.StandardCheckpointer()
