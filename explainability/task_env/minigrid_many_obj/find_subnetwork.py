@@ -78,8 +78,6 @@ def get_policy_from_q_net(q):
 
     return policy
 
-# restored_model = checkpointer.restore(full_path, abstract_state)
-# q = nnx.merge(graphdef, restored_model)
 
 policy = get_policy_from_q_net(q)
 
@@ -107,11 +105,6 @@ def evaluate_policy_on_task(policy, task=None, obj_colors=OBJ_COLORS, randomize=
 print("evaluate original q network")
 q_eval_scores = evaluate_policy_on_task(policy, seed=seed)
 
-q_copy = nnx.clone(q)
-# # evaluate_policy(env_name, q_copy)
-# print("evaluate q_copy network")
-# policy_copy = get_policy_from_q_net(q_copy)
-# _ = evaluate_policy_on_task(policy_copy, task=subtask)
 
 # ---------------------------
 # (2) Define masked network
@@ -170,8 +163,6 @@ frozen_params = {
 }
 
 masked_net = MaskedMLP(frozen_params, nnx.Rngs(seed+2))
-# nnx.display(masked_net)
-masked_net_copy = nnx.clone(masked_net)
 
 # ---------------------------
 # (3) Subnetwork loss and sparsity computation
@@ -223,10 +214,6 @@ def q_diff_loss(masked_net: MaskedMLP, q_net: MLP, state):
     """
     q_masked = masked_net(state)
     q_original = jax.lax.stop_gradient(q_net(state))
-
-    # jax.debug.print("q_masked={q_masked}", q_masked=q_masked)
-    # jax.debug.print("q_original={q_original}", q_original=q_original)
-    # jax.debug.print("----------------")
 
     # # MSE and abs error loss
     q_values_diff = q_masked - q_original
@@ -372,7 +359,6 @@ def sample_state(env, subtask=None, batch_size=128, key=jr.PRNGKey(seed)):
         minval=low,
         maxval=high,
     )
-    # jax.debug.print("state={state}", state=state)
 
     obj_colors = OBJ_COLORS
 
@@ -410,9 +396,6 @@ def sample_state(env, subtask=None, batch_size=128, key=jr.PRNGKey(seed)):
     # Broadcast the one-hot context to the batch
     # Replace the last 6 elements of every row in `state`
     state = state.at[:, -one_hot_length:].set(one_hot_context)
-
-    # jax.debug.print("state={state}", state=state)
-    # jax.debug.print("-------------")
 
     return state
 
@@ -459,10 +442,6 @@ for step in tqdm(range(1, hparams_algorithm.get("total_timesteps") + 1), desc="T
         logger.record_stat(
             "hard sparsity", training_metrics['hard_sparsity'], step=step + 1
         )
-
-    # if step % 1000 == 0:
-    #     print(f"step={step} loss={loss_val:.6f} q_diff_loss={training_metrics['q_diff_loss']:.6f} "
-    #           f"sparsity_loss={training_metrics['sparsity_loss']:.6f} sparsity@{threshold_eval}={training_metrics['hard_sparsity']:.6f}")
 
     # extract and evaluate subnet
     if step % eval_steps == 0: # and training_metrics['hard_sparsity'] < 1.0:
