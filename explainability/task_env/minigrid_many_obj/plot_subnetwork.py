@@ -48,10 +48,10 @@ ckpt_subnet = os.path.expanduser(
 )
 
 # choose ckpt path
-task, ckpt_path = f"full net", ckpt_full_net
-task, ckpt_path = f"subnet {subtask}", ckpt_subnet
+task, ckpt_path = f"Pretrained network", ckpt_full_net
+task, ckpt_path = f"Subnetwork {subtask}", ckpt_subnet
 
-plot_info = f"{experiment}, {task}, seed {seed_num}, step {step}"
+plot_info = f"{experiment}, seed {seed_num}, step {step}"
 
 # Recreate MLP with same architecture as training
 hparams_model = dict(
@@ -112,7 +112,7 @@ custom_cmap = LinearSegmentedColormap.from_list("highlight_zero", colors)
 custom_cmap.set_bad(color='black')
 
 # Scale subplot sizes by matrix width
-width_ratios = [W.shape[1] for W in weights] + [2.0]  # last is colorbar
+width_ratios = [W.shape[1] for W in weights] + [1.5]  # last is colorbar
 
 # Scale figure size based on total width
 scale = 0.1  # tweak this to control overall size
@@ -165,7 +165,7 @@ cbar.set_label("Weight Value", fontsize=10)
 cbar.ax.tick_params(labelsize=8)
 
 # Figure title and bottom text
-fig.suptitle("Network Weights", fontsize=14)
+fig.suptitle(f"{task} weights", fontsize=14)
 fig.text(
     0.5,      # x-coordinate (center)
     0.01,     # y-coordinate (near bottom)
@@ -174,6 +174,12 @@ fig.text(
     va='bottom',
     fontsize=8
 )
+
+import matplotlib.patches as mpatches
+# Add black grid legend for masked values
+masked_patch = mpatches.Patch(color='black', label='Masked (zero) weight')
+fig.legend(handles=[masked_patch], loc='lower center', bbox_to_anchor=(0.7, 0.10),
+           ncol=1, fontsize=8)
 
 plt.tight_layout(rect=[0, 0, 1, 0.95])
 plt.show()
