@@ -208,11 +208,18 @@ for subtask in subtask_list:
     masked_layers = []
     titles = []
 
+    # Compute total masked weights per layer
+    layer_mask_info = []
+    
     for i in range(num_layers):
         stacked = np.stack([weights_dict[sub][i] for sub in subtask_list], axis=0)
-        zero_all_mask = (stacked == 0).all(axis=0)  # grey
+        zero_all_mask = (stacked == 0).all(axis=0)
+        shared_mask = np.sum(zero_all_mask)
+
         current_weights = stacked[subtask_list.index(subtask)]
         black_mask = (current_weights == 0) & (~zero_all_mask)  # Black
+        subtask_specific = np.sum(black_mask)
+        layer_mask_info.append((shared_mask, subtask_specific))
 
         # Start with weights
         plot_array = np.copy(current_weights)
@@ -223,6 +230,12 @@ for subtask in subtask_list:
 
         layer_name = "Output Layer" if i == num_layers - 1 else f"Hidden Layer {i}"
         titles.append(layer_name)
+    
+    mask_info = ""
+    for i, (shared, subtask_only) in enumerate(layer_mask_info):
+        layer_name = "Output Layer" if i == num_layers - 1 else f"Hidden Layer {i}"
+        mask_info += f"{layer_name}: {shared} shared, {subtask_only} task-specific\n"
+
 
     # Plot
     width_ratios = [W.shape[1] for W, _, _ in masked_layers] + [1.5]
@@ -294,5 +307,21 @@ for subtask in subtask_list:
                ncol=1, fontsize=8)
 
     fig.suptitle(f"Subtask {subtask} masked weights", fontsize=14)
+    fig.text(
+        0.5,
+        0.01,
+        f"{plot_info}",
+        ha='center',
+        va='bottom',
+        fontsize=8
+    )
+    fig.text(
+        0.5,
+        0.2,
+        mask_info,
+        ha='left',
+        va='bottom',
+        fontsize=8
+    )
     plt.tight_layout(rect=[0, 0, 1, 0.95])
     plt.show()
