@@ -216,7 +216,11 @@ def q_diff_loss(masked_net: MaskedMLP, q_net: MLP, state):
     q_values_diff = q_masked - q_original
     # q_diff_loss_val = jnp.mean(q_values_diff ** 2)
     q_diff_loss_val = jnp.mean(jnp.abs(q_values_diff))
-    return q_diff_loss_val
+
+    # debug metrics
+    abs_avg_q_original = jnp.mean(jnp.abs(q_original))
+    abs_avg_q_masked = jnp.mean(jnp.abs(q_masked))
+    return q_diff_loss_val, (abs_avg_q_original, abs_avg_q_masked)
 
 def subnetwork_loss(masked_net: MaskedMLP, q_net: MLP, state, sparsity_lambda=1e-3):
     """
@@ -228,7 +232,7 @@ def subnetwork_loss(masked_net: MaskedMLP, q_net: MLP, state, sparsity_lambda=1e
         batch: Dict with keys 'obs' and 'act'
         sparsity_lambda: Weight for mask sparsity regularization
     """
-    q_diff_loss_val = q_diff_loss(masked_net, q_net, state)
+    q_diff_loss_val, (abs_avg_q_original, abs_avg_q_masked) = q_diff_loss(masked_net, q_net, state)
     soft_sparsity = soft_mask_sparsity(masked_net.mask_logits)
     sparsity_loss = sparsity_lambda * soft_sparsity
     total_loss = q_diff_loss_val + sparsity_loss
@@ -240,6 +244,8 @@ def subnetwork_loss(masked_net: MaskedMLP, q_net: MLP, state, sparsity_lambda=1e
         'soft_sparsity': soft_sparsity,
         'hard_sparsity': hard_sparsity,
         'sparsity_loss': sparsity_loss,
+        'abs_avg_q_original': abs_avg_q_original,
+        'abs_avg_q_masked': abs_avg_q_masked,
     }
 
     return total_loss, metrics
@@ -445,6 +451,12 @@ for step in tqdm(range(1, hparams_algorithm.get("total_timesteps") + 1), desc="T
         logger.record_stat(
             "hard sparsity", training_metrics['hard_sparsity'], step=step + 1
         )
+        logger.record_stat(
+            "avg abs q value", training_metrics['abs_avg_q_original'], step=step + 1
+        )
+        logger.record_stat(
+            "avg abs masked q value", training_metrics['abs_avg_q_masked'], step=step + 1
+        )
 
     # extract and evaluate subnet
     if step % eval_steps == 0: # and training_metrics['hard_sparsity'] < 1.0:
@@ -533,14 +545,18 @@ _ = evaluate_policy_on_task(policy, seed=seed+2)
 import random
 
 task = random.choice(OBJ_COLORS)
+sum_reward = 0.0
 eval_env = make_ocean_env(task, randomize=randomize_env, render_mode="human")
 obs, _ = eval_env.reset()
 while True:
     action = subnet_policy(obs)
     obs, reward, terminated, truncated, info = eval_env.step(action)
+    sum_reward += reward
     if terminated or truncated:
         print(f"{task} reward: {reward}")
+        print(f"{task} return: {sum_reward}")
         eval_env.close()
         task = random.choice(OBJ_COLORS)
+        sum_reward = 0.0
         eval_env = make_ocean_env(task, randomize=randomize_env, render_mode="human")
         obs, _ = eval_env.reset()
