@@ -109,7 +109,7 @@ colors = [
 ]
 custom_cmap = LinearSegmentedColormap.from_list("highlight_zero", colors)
 
-# scale subplot sizes by matrix width
+# Scale subplot sizes by matrix width
 width_ratios = [W.shape[1] for W in weights] + [2.0]  # last is colorbar
 
 # Scale figure size based on total width
@@ -124,7 +124,7 @@ gs = fig.add_gridspec(
     1,
     len(weights) + 1,
     width_ratios=width_ratios,
-    wspace=0.5  # increased horizontal space between layers
+    wspace=0.5  # tweak this to control horizontal space between layers
 )
 
 axes = []
@@ -153,12 +153,14 @@ for i, W in enumerate(weights):
         ax.set_xticklabels([0, w - 1])
     
     ax.set_title(titles[i], fontsize=10)
+    ax.tick_params(axis='both', labelsize=8)  # set tick label size
     axes.append(ax)
 
 # Colorbar
 cax = fig.add_subplot(gs[0, -1])
 cbar = fig.colorbar(im, cax=cax)
-cbar.set_label("Weight Value")
+cbar.set_label("Weight Value", fontsize=10)
+cbar.ax.tick_params(labelsize=8)
 
 # Figure title and bottom text
 fig.suptitle("Network Weights", fontsize=14)
