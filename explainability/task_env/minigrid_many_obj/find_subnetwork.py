@@ -214,8 +214,8 @@ def q_diff_loss(masked_net: MaskedMLP, q_net: MLP, state):
 
     # # MSE and abs error loss
     q_values_diff = q_masked - q_original
-    # q_diff_loss_val = jnp.mean(q_values_diff ** 2)
-    q_diff_loss_val = jnp.mean(jnp.abs(q_values_diff))
+    q_diff_loss_val = jnp.mean(q_values_diff ** 2)
+    # q_diff_loss_val = jnp.mean(jnp.abs(q_values_diff))
 
     # debug metrics
     abs_avg_q_original = jnp.mean(jnp.abs(q_original))
