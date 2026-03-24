@@ -40,7 +40,6 @@ ckpt_full_net = os.path.expanduser(
 
 # Set up environment to get input/output shapes
 subtask = "purple"
-# env_name = f"ocean_{subtask}_{experiment}"
 env = make_ocean_env(subtask)
 
 step = int(file_name.split("_")[-3])
@@ -49,8 +48,10 @@ ckpt_subnet = os.path.expanduser(
 )
 
 # choose ckpt path
-ckpt_path = ckpt_full_net
-ckpt_path = ckpt_subnet
+task, ckpt_path = f"full net", ckpt_full_net
+task, ckpt_path = f"subnet {subtask}", ckpt_subnet
+
+plot_info = f"{experiment}, {task}, seed {seed_num}, step {step}"
 
 # Recreate MLP with same architecture as training
 hparams_model = dict(
@@ -108,17 +109,23 @@ colors = [
 ]
 custom_cmap = LinearSegmentedColormap.from_list("highlight_zero", colors)
 
-# Determine maximum input and output neuron indices across all layers
-max_input = max(W.shape[1] for W in weights)
-max_output = max(W.shape[0] for W in weights)
+# scale subplot sizes by matrix width
+width_ratios = [W.shape[1] for W in weights] + [2.0]  # last is colorbar
 
-# Figure size: make each subplot proportional to max neurons
-subplot_width = 4
-subplot_height = 4
-fig = plt.figure(figsize=(subplot_width * len(weights), subplot_height))
+# Scale figure size based on total width
+scale = 0.1  # tweak this to control overall size
+fig_width = sum(width_ratios) * scale
+fig_height = max(W.shape[0] for W in weights) * scale
 
-# Gridspec with colorbar
-gs = fig.add_gridspec(1, len(weights) + 1, width_ratios=[1]*len(weights) + [0.05], wspace=0.3)
+fig = plt.figure(figsize=(fig_width, fig_height))
+
+# Gridspec
+gs = fig.add_gridspec(
+    1,
+    len(weights) + 1,
+    width_ratios=width_ratios,
+    wspace=0.5  # increased horizontal space between layers
+)
 
 axes = []
 for i, W in enumerate(weights):
@@ -127,36 +134,42 @@ for i, W in enumerate(weights):
     # Mask exact zeros
     masked_W = np.ma.masked_equal(W, 0.0)
     
-    # Plot with masked zeros and custom colormap
+    # Plot with square cells
     im = ax.imshow(masked_W, cmap=custom_cmap, norm=norm, aspect='equal')
     
     # Labels
-    ax.set_xlabel("Output Neuron Index")
     if i == 0:
-        ax.set_ylabel("Input Neuron Index")
-    else:
-        ax.set_yticklabels([])
+        ax.set_xlabel("Output Neuron Index", fontsize=10)
+        ax.set_ylabel("Input Neuron Index", fontsize=10)
     
-    # Fix axis limits to align all subplots
-    ax.set_xlim(-0.5, max_input-0.5)
-    ax.set_ylim(max_output-0.5, -0.5)  # invert y-axis to match imshow
+    # Per-layer limits
+    h, w = W.shape
+    ax.set_xlim(-0.5, w - 0.5)
+    ax.set_ylim(h - 0.5, -0.5)
     
-    # Output layer x-ticks only at first and last neuron
+    # Output layer ticks only at first layer
     if i == len(weights) - 1:
-        ax.set_xticks([0, W.shape[1]-1])
-        ax.set_xticklabels([0, W.shape[1]-1])
+        ax.set_xticks([0, w - 1])
+        ax.set_xticklabels([0, w - 1])
     
-    ax.set_title(titles[i])
+    ax.set_title(titles[i], fontsize=10)
     axes.append(ax)
 
-# Colorbar next to last layer
+# Colorbar
 cax = fig.add_subplot(gs[0, -1])
 cbar = fig.colorbar(im, cax=cax)
 cbar.set_label("Weight Value")
 
-# Figure-wide title
-fig.suptitle(f"Network Weights: {ckpt_path}", fontsize=16)
-
+# Figure title and bottom text
+fig.suptitle("Network Weights", fontsize=14)
+fig.text(
+    0.5,      # x-coordinate (center)
+    0.01,     # y-coordinate (near bottom)
+    f"{plot_info}",
+    ha='center',
+    va='bottom',
+    fontsize=8
+)
 
 plt.tight_layout(rect=[0, 0, 1, 0.95])
 plt.show()
