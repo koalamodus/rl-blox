@@ -129,7 +129,10 @@ else:
     ]
     custom_cmap = LinearSegmentedColormap.from_list("highlight_zero", colors)
 
-custom_cmap.set_bad(color='black')  # Black for masked (zero in all subtasks)
+shared_mask_color = 'black'
+subtask_mask_color = 'red' if plot_mask_only else 'yellow'
+
+custom_cmap.set_bad(color=shared_mask_color)  # Black for masked (zero in all subtasks)
 
 # Figure size and layout
 width_ratios = [W.shape[1] for W in masked_layers] + [1.5]
@@ -187,7 +190,7 @@ fig.text(
 )
 
 # Legend for masked weights
-masked_patch = mpatches.Patch(color='black', label='Zero in all subtasks')
+masked_patch = mpatches.Patch(color=shared_mask_color, label='Zero in all subtasks')
 fig.legend(handles=[masked_patch], loc='lower center', bbox_to_anchor=(0.7, 0.10),
            ncol=1, fontsize=8)
 
@@ -215,48 +218,82 @@ for subtask in subtask_list:
         # Start with weights
         plot_array = np.copy(current_weights)
         
-        # Use masked arrays for special coloring
-        masked_array = np.ma.masked_array(plot_array)
-        # Set masks
-        masked_array.mask = False  # start with no mask
-
-        # We will override colors in imshow using a colormap with "bad" colors
-        # We'll map grey and black manually via masked array trick
-        masked_array = np.ma.array(plot_array, mask=zero_all_mask)  # mask global zeros
-
+        # Create masked array: mask global zeros for special coloring
+        masked_array = np.ma.masked_array(plot_array, mask=zero_all_mask)
         masked_layers.append((masked_array, black_mask, zero_all_mask))
+
         layer_name = "Output Layer" if i == num_layers - 1 else f"Hidden Layer {i}"
         titles.append(layer_name)
 
     # Plot
-    fig, axes = plt.subplots(1, num_layers, figsize=(num_layers*3, 3))
-    if num_layers == 1:
-        axes = [axes]
+    width_ratios = [W.shape[1] for W, _, _ in masked_layers] + [1.5]
+    scale = 0.1
+    fig_width = sum(width_ratios) * scale
+    fig_height = max(W.shape[0] for W, _, _ in masked_layers) * scale
+    fig = plt.figure(figsize=(fig_width, fig_height))
+    gs = fig.add_gridspec(1, len(masked_layers)+1, width_ratios=width_ratios, wspace=0.5)
 
-    for ax, (W_masked, black_mask, grey_mask), title in zip(axes, masked_layers, titles):
-        # Base colormap for normal weights
-        im = ax.imshow(W_masked, cmap='viridis', aspect='equal')
-        
-        # Overlay grey for global zeros
-        grey_overlay = np.zeros_like(W_masked, dtype=float)
-        grey_overlay[grey_mask] = 1  # any non-zero to show
-        ax.imshow(grey_overlay, cmap='Greys', alpha=0.5)
-        
-        # Overlay black for subtask zeros
-        black_overlay = np.zeros_like(W_masked, dtype=float)
-        black_overlay[black_mask] = 1
-        ax.imshow(black_overlay, cmap='Greys', alpha=1.0)
-        
-        ax.set_title(title)
-        ax.set_xlabel("Output Neuron")
-        ax.set_ylabel("Input Neuron")
+    if plot_mask_only:
+        custom_cmap = LinearSegmentedColormap.from_list("mask_bw", ["white", "black"])
+        custom_cmap.set_bad(color=shared_mask_color)
+    else:
+        abs_max = max(np.abs(W).max() for W, _, _ in masked_layers)
+        norm = TwoSlopeNorm(vmin=-abs_max, vcenter=0, vmax=abs_max)
+        colors = [
+            (0, "blue"),
+            (0.49, "lightblue"),
+            (0.5, "white"),
+            (0.51, "lightcoral"),
+            (1, "red")
+        ]
+        custom_cmap = LinearSegmentedColormap.from_list("highlight_zero", colors)
+        custom_cmap.set_bad(color=shared_mask_color)
+
+    axes = []
+    for i, (W_masked, black_mask, grey_mask) in enumerate(masked_layers):
+        ax = fig.add_subplot(gs[0, i])
+        im = ax.imshow(W_masked, cmap=custom_cmap, norm=norm, aspect='equal')
+
+        if plot_mask_only:
+            # Overlay black for zeros in this subtask only
+            black_overlay = np.zeros_like(W_masked, dtype=float)
+            black_overlay[black_mask] = 1
+            ax.imshow(black_overlay, cmap='Greys', alpha=1.0)
+
+        subtask_overlay = np.ma.masked_where(~black_mask, black_mask)  # mask everything except current subtask zeros
+        ax.imshow(subtask_overlay, cmap=LinearSegmentedColormap.from_list('subtask_mask', [subtask_mask_color, subtask_mask_color]), alpha=1.0)
+
+        if i == 0:
+            ax.set_xlabel("Output Neuron Index", fontsize=10)
+            ax.set_ylabel("Input Neuron Index", fontsize=10)
+
+        h, w = W_masked.shape
+        ax.set_xlim(-0.5, w-0.5)
+        ax.set_ylim(h-0.5, -0.5)
+
+        if i == len(masked_layers)-1:
+            ax.set_xticks([0, w-1])
+            ax.set_xticklabels([0, w-1])
+
+        ax.set_title(titles[i], fontsize=10)
+        ax.tick_params(axis='both', labelsize=8)
+        axes.append(ax)
+
+    # Colorbar (only for weight-plot mode)
+    if not plot_mask_only:
+        cax = fig.add_subplot(gs[0, -1])
+        cbar = fig.colorbar(im, cax=cax)
+        cbar.set_label("Weight Value", fontsize=10)
+        cbar.ax.tick_params(labelsize=8)
 
     # Legend
     patches = [
-        mpatches.Patch(color='grey', label='Zero across all subtasks'),
-        mpatches.Patch(color='black', label='Zero in this subtask only')
+        mpatches.Patch(color=shared_mask_color, label='Zero across all subtasks'),
+        mpatches.Patch(color=subtask_mask_color, label='Zero in this subtask')
     ]
-    fig.legend(handles=patches, loc='lower center', ncol=2)
-    fig.suptitle(f"Subtask: {subtask}", fontsize=14)
-    plt.tight_layout()
+    fig.legend(handles=patches, loc='lower center', bbox_to_anchor=(0.7, 0.10),
+               ncol=1, fontsize=8)
+
+    fig.suptitle(f"Subtask {subtask} masked weights", fontsize=14)
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
     plt.show()
