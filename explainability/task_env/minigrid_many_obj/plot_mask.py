@@ -179,7 +179,7 @@ if not plot_mask_only:
     cbar.ax.tick_params(labelsize=8)
 
 # Figure title and bottom text
-fig.suptitle(f"zero weights in all subtasks", fontsize=14)
+fig.suptitle(f"Masked weights across all subtasks", fontsize=14)
 fig.text(
     0.5,
     0.01,
@@ -190,11 +190,10 @@ fig.text(
 )
 
 # Legend for masked weights
-masked_patch = mpatches.Patch(color=shared_mask_color, label='Zero in all subtasks')
+masked_patch = mpatches.Patch(color=shared_mask_color, label='Mask in all subtasks')
 fig.legend(handles=[masked_patch], loc='lower center', bbox_to_anchor=(0.7, 0.10),
            ncol=1, fontsize=8)
 
-fig.suptitle(f"Masked weights across all subtasks", fontsize=14)
 plt.tight_layout(rect=[0, 0, 1, 0.95])
 plt.show()
 
@@ -288,8 +287,8 @@ for subtask in subtask_list:
 
     # Legend
     patches = [
-        mpatches.Patch(color=shared_mask_color, label='Zero across all subtasks'),
-        mpatches.Patch(color=subtask_mask_color, label='Zero in this subtask')
+        mpatches.Patch(color=shared_mask_color, label='Mask across all subtasks'),
+        mpatches.Patch(color=subtask_mask_color, label='Mask in this subtask')
     ]
     fig.legend(handles=patches, loc='lower center', bbox_to_anchor=(0.7, 0.10),
                ncol=1, fontsize=8)
