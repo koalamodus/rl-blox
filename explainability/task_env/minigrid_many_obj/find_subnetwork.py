@@ -10,9 +10,6 @@ import jax.random as jr
 seed = 49  # random seed for np and jax
 key = jr.PRNGKey(seed)
 
-train_mask = True
-save_final_mask = train_mask
-load_final_mask = not train_mask
 # ---------------------------
 # (1) Load trained network
 # ---------------------------
@@ -81,7 +78,7 @@ def get_policy_from_q_net(q):
 
 policy = get_policy_from_q_net(q)
 
-eval_num_episode = 10 if randomize_env else 1
+eval_num_episode = 20 if randomize_env else 1
 
 from eval_helper import eval_policy
 def evaluate_policy_on_task(policy, task=None, obj_colors=OBJ_COLORS, randomize=randomize_env, num_episode=eval_num_episode, render_mode=None, seed=42, verbose=True):
@@ -308,12 +305,13 @@ from rl_blox.logging.logger import AIMLogger
 eval_steps = 10
 
 hparams_algorithm = dict(
-    batch_size=128,
-    total_timesteps=1_000,
+    batch_size=1024,
+    total_timesteps=1_500,
     learning_rate=1e-4,
     learning_rate_start=1e-3,
     learning_rate_end=1e-6,
-    learning_starts=3_000,
+    learning_starts=0,
+    learning_ends=1_000,
     lambda_start= 1e-8,
     lambda_end= 1e-8,
     threshold_eval=0.5,
@@ -327,6 +325,7 @@ logger.define_experiment(
 )
 
 logger.run.log_info(f"random seed: {seed}")
+logger.run.log_info(f"number of episode in evaluation: {eval_num_episode}")
 
 logger.run.log_info("evaluate original q network")
 logger.run.log_info(f"{q_eval_scores}")
@@ -336,7 +335,9 @@ threshold_eval = hparams_algorithm.get("threshold_eval")
 # Set learning rate, use either scheduler or a constant value
 lr_constant = hparams_algorithm.pop("learning_rate")
 lr_schedule_fn = optax.linear_schedule(
-   init_value=hparams_algorithm.pop("learning_rate_start"), end_value=hparams_algorithm.pop("learning_rate_end"), transition_steps=hparams_algorithm.get("total_timesteps"))
+    init_value=hparams_algorithm.pop("learning_rate_start"), end_value=hparams_algorithm.pop("learning_rate_end"),
+    transition_steps=hparams_algorithm.get("learning_ends"), transition_begin=hparams_algorithm.get("learning_starts")
+)
 
 # lr = lr_constant
 lr = lr_schedule_fn
