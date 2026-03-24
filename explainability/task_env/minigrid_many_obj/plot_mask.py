@@ -115,7 +115,7 @@ for i in range(num_layers):
     titles.append(layer_name)
 
 # ---------------------------
-# Plotting
+# Plot masked weights across all subtasks
 # ---------------------------
 if plot_mask_only:
     custom_cmap = LinearSegmentedColormap.from_list("mask_bw", ["white", "black"])
@@ -194,3 +194,69 @@ fig.legend(handles=[masked_patch], loc='lower center', bbox_to_anchor=(0.7, 0.10
 fig.suptitle(f"Masked weights across all subtasks", fontsize=14)
 plt.tight_layout(rect=[0, 0, 1, 0.95])
 plt.show()
+
+# ---------------------------
+# Plot masked weights for each subtasks
+# ---------------------------
+
+subtask_list = list(weights_dict.keys())
+num_layers = len(weights_dict[subtask_list[0]])
+
+for subtask in subtask_list:
+    masked_layers = []
+    titles = []
+
+    for i in range(num_layers):
+        stacked = np.stack([weights_dict[sub][i] for sub in subtask_list], axis=0)
+        zero_all_mask = (stacked == 0).all(axis=0)  # grey
+        current_weights = stacked[subtask_list.index(subtask)]
+        black_mask = (current_weights == 0) & (~zero_all_mask)  # Black
+
+        # Start with weights
+        plot_array = np.copy(current_weights)
+        
+        # Use masked arrays for special coloring
+        masked_array = np.ma.masked_array(plot_array)
+        # Set masks
+        masked_array.mask = False  # start with no mask
+
+        # We will override colors in imshow using a colormap with "bad" colors
+        # We'll map grey and black manually via masked array trick
+        masked_array = np.ma.array(plot_array, mask=zero_all_mask)  # mask global zeros
+
+        masked_layers.append((masked_array, black_mask, zero_all_mask))
+        layer_name = "Output Layer" if i == num_layers - 1 else f"Hidden Layer {i}"
+        titles.append(layer_name)
+
+    # Plot
+    fig, axes = plt.subplots(1, num_layers, figsize=(num_layers*3, 3))
+    if num_layers == 1:
+        axes = [axes]
+
+    for ax, (W_masked, black_mask, grey_mask), title in zip(axes, masked_layers, titles):
+        # Base colormap for normal weights
+        im = ax.imshow(W_masked, cmap='viridis', aspect='equal')
+        
+        # Overlay grey for global zeros
+        grey_overlay = np.zeros_like(W_masked, dtype=float)
+        grey_overlay[grey_mask] = 1  # any non-zero to show
+        ax.imshow(grey_overlay, cmap='Greys', alpha=0.5)
+        
+        # Overlay black for subtask zeros
+        black_overlay = np.zeros_like(W_masked, dtype=float)
+        black_overlay[black_mask] = 1
+        ax.imshow(black_overlay, cmap='Greys', alpha=1.0)
+        
+        ax.set_title(title)
+        ax.set_xlabel("Output Neuron")
+        ax.set_ylabel("Input Neuron")
+
+    # Legend
+    patches = [
+        mpatches.Patch(color='grey', label='Zero across all subtasks'),
+        mpatches.Patch(color='black', label='Zero in this subtask only')
+    ]
+    fig.legend(handles=patches, loc='lower center', ncol=2)
+    fig.suptitle(f"Subtask: {subtask}", fontsize=14)
+    plt.tight_layout()
+    plt.show()
