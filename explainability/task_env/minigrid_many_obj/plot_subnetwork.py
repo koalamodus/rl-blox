@@ -73,7 +73,7 @@ q_net = nnx.merge(graphdef, restored_model)
 print("Loaded model checkpoint.")
 
 # ---------------------------
-# Plot MLP weights - white is 0
+# Plot MLP weights - black is 0
 # ---------------------------
 
 import numpy as np
@@ -108,6 +108,8 @@ colors = [
     (1, "red")
 ]
 custom_cmap = LinearSegmentedColormap.from_list("highlight_zero", colors)
+# Set masked values (zeros) to black
+custom_cmap.set_bad(color='black')
 
 # Scale subplot sizes by matrix width
 width_ratios = [W.shape[1] for W in weights] + [2.0]  # last is colorbar
