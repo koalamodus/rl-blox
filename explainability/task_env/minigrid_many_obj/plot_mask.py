@@ -90,6 +90,185 @@ import matplotlib.patches as mpatches
 import numpy as np
 
 # ---------------------------
+# Shared weights across subtasks
+# ---------------------------
+
+subtask_list = list(weights_dict.keys())
+num_layers = len(weights_dict[subtask_list[0]])
+
+layers_vis = []
+titles = []
+
+for i in range(num_layers):
+    stacked = np.stack([weights_dict[sub][i] for sub in subtask_list], axis=0)
+
+    # Masks
+    used_any = (stacked != 0).any(axis=0)     # union
+    used_all = (stacked != 0).all(axis=0)     # intersection
+
+    # Initialize: 0 = black (unused)
+    vis = np.zeros_like(used_any, dtype=int)
+
+    # Task-specific (some but not all) → 1 (red)
+    vis[used_any & (~used_all)] = 1
+
+    # Shared (all) → 2 (white)
+    vis[used_all] = 2
+
+    layers_vis.append(vis)
+
+    layer_name = "Output Layer" if i == num_layers - 1 else f"Hidden Layer {i}"
+    titles.append(layer_name)
+
+# ---------------------------
+# Plot
+# ---------------------------
+
+from matplotlib.colors import ListedColormap
+import matplotlib.patches as mpatches
+
+cmap = ListedColormap(["white", "green", "#C2E1BCB7"])
+
+width_ratios = [W.shape[1] for W in layers_vis]
+scale = 0.1
+fig_width = sum(width_ratios) * scale
+fig_height = max(W.shape[0] for W in layers_vis) * scale
+
+fig = plt.figure(figsize=(fig_width, fig_height))
+gs = fig.add_gridspec(1, len(layers_vis), width_ratios=width_ratios, wspace=0.3)
+
+for i, W in enumerate(layers_vis):
+    ax = fig.add_subplot(gs[0, i])
+    ax.imshow(W, cmap=cmap, aspect='equal', vmin=0, vmax=2)
+
+    if i == 0:
+        ax.set_xlabel("Output Neuron Index", fontsize=10)
+        ax.set_ylabel("Input Neuron Index", fontsize=10)
+
+    h, w = W.shape
+    ax.set_xlim(-0.5, w-0.5)
+    ax.set_ylim(h-0.5, -0.5)
+
+    if i == len(layers_vis)-1:
+        ax.set_xticks([0, w-1])
+        ax.set_xticklabels([0, w-1])
+
+    ax.set_title(titles[i], fontsize=10)
+    ax.tick_params(axis='both', labelsize=8)
+
+# Legend
+legend_patches = [
+    mpatches.Patch(color="#C2E1BCB7", label='Shared weights'),
+    mpatches.Patch(color='green', label='Task-specific weights'),
+    mpatches.Patch(color='white', label='Masked (unused) weights')
+]
+
+fig.legend(handles=legend_patches,
+           loc='lower center', bbox_to_anchor=(0.5, 0.02),
+           ncol=3, fontsize=9)
+
+fig.suptitle("Shared weight across subtasks", fontsize=14)
+
+plt.tight_layout(rect=[0, 0.05, 1, 0.95])
+plt.show()
+
+# ---------------------------
+# Subnetwork weights
+
+# green → weights used by this subtask but not used in all subtasks
+# white → weights used by other subtasks (but not this one)
+# light green → weights used by all subtasks
+# white → unused everywhere
+# ---------------------------
+
+subtask_list = list(weights_dict.keys())
+num_layers = len(weights_dict[subtask_list[0]])
+
+# 0=black, 1=green, 2=pink, 3=light green
+cmap = ListedColormap(["white", "green", "white", "#C2E1BCB7"])
+
+for s_idx, subtask in enumerate(subtask_list):
+
+    layers_vis = []
+    titles = []
+
+    for i in range(num_layers):
+        stacked = np.stack([weights_dict[sub][i] for sub in subtask_list], axis=0)
+
+        current = stacked[s_idx]
+        others = np.delete(stacked, s_idx, axis=0)
+
+        # Masks
+        used_current = (current != 0)
+        used_others = (others != 0).any(axis=0)
+        used_all = (stacked != 0).all(axis=0)
+
+        # Initialize → black
+        vis = np.zeros_like(current, dtype=int)
+
+        # 1. Used in ALL subtasks → light green
+        vis[used_all] = 3
+
+        # 2. Used in THIS subtask but NOT all → green
+        vis[used_current & (~used_all)] = 1
+
+        # 3. Used in OTHER subtasks but NOT this one → pink
+        vis[(~used_current) & used_others] = 2
+
+        layers_vis.append(vis)
+
+        layer_name = "Output Layer" if i == num_layers - 1 else f"Hidden Layer {i}"
+        titles.append(layer_name)
+
+    # ---------------------------
+    # Plot
+    # ---------------------------
+
+    width_ratios = [W.shape[1] for W in layers_vis]
+    scale = 0.1
+    fig_width = sum(width_ratios) * scale
+    fig_height = max(W.shape[0] for W in layers_vis) * scale
+
+    fig = plt.figure(figsize=(fig_width, fig_height))
+    gs = fig.add_gridspec(1, len(layers_vis), width_ratios=width_ratios, wspace=0.3)
+
+    for i, W in enumerate(layers_vis):
+        ax = fig.add_subplot(gs[0, i])
+        ax.imshow(W, cmap=cmap, aspect='equal', vmin=0, vmax=3)
+
+        if i == 0:
+            ax.set_xlabel("Output Neuron Index", fontsize=10)
+            ax.set_ylabel("Input Neuron Index", fontsize=10)
+
+        h, w = W.shape
+        ax.set_xlim(-0.5, w-0.5)
+        ax.set_ylim(h-0.5, -0.5)
+
+        if i == len(layers_vis)-1:
+            ax.set_xticks([0, w-1])
+            ax.set_xticklabels([0, w-1])
+
+        ax.set_title(titles[i], fontsize=10)
+        ax.tick_params(axis='both', labelsize=8)
+
+    # Legend
+    legend_patches = [
+        mpatches.Patch(color="#C2E1BCB7", label='Shared weights across all tasks'),
+        mpatches.Patch(color='green', label='Task-specific weights'),
+        # mpatches.Patch(color='grey', label='Used in other subtasks'),
+        mpatches.Patch(color='white', label='Masked (unused) weights')
+    ]
+
+    fig.legend(handles=legend_patches,
+               loc='lower center', bbox_to_anchor=(0.5, 0.02),
+               ncol=4, fontsize=9)
+
+    fig.suptitle(f"Subnetwork {subtask}", fontsize=14)
+
+    plt.tight_layout(rect=[0, 0.05, 1, 0.95])
+    plt.show()
+
+# ---------------------------
 # Prepare masked layers
 # ---------------------------
 subtask_list = list(weights_dict.keys())
