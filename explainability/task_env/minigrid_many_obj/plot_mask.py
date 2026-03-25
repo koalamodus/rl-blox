@@ -152,20 +152,19 @@ for i, W in enumerate(layers_vis):
     ax.set_title(titles[i], fontsize=10)
     ax.tick_params(axis='both', labelsize=8)
 
-     # --- Add arrow and text for Hidden Layer 0 ---
+    # --- Add annotation for Hidden Layer 0 ---
     if i == 0:
-        # coordinates for the bracket
-        x_bracket = w - 0.5       # slightly outside right edge            # 6 rows from bottom
-        y_middle = h - (1+6)/2
-        
-        # Use annotate with bracket-style arrow
-        # (change magic values below carefully to keep the arrow horizontal)
+        x_axes = 1.02
+        y_axes = (6/2) / h
+
         ax.annotate(
             "context encoding of subtasks",
-            xy=(x_bracket, y_middle),
-            xytext=(x_bracket+4.5, y_middle),
+            xy=(x_axes, y_axes),
+            xycoords=ax.transAxes,
+            xytext=(x_axes + 0.15, y_axes),
+            textcoords=ax.transAxes,
             arrowprops=dict(
-                arrowstyle="<-[,widthB=1.5,lengthB=0.25,angleB=0",
+                arrowstyle="<-[,widthB=1.5,lengthB=0.3",
                 color="black",
                 linewidth=1.0,
             ),
@@ -184,14 +183,14 @@ for i, W in enumerate(layers_vis):
 
         ax.annotate(
             "actions",
-            xy=(x_middle, y_bracket),          # bottom of axis
+            xy=(x_middle, y_bracket),
             xycoords=ax.transAxes,
             xytext=(x_middle, y_text),
             textcoords=ax.transAxes,
             ha="center",
             va="top",
             arrowprops=dict(
-                arrowstyle="<-[,widthB=0.75,lengthB=0.5",
+                arrowstyle="<-[,widthB=0.75,lengthB=0.3",
                 color="black",
                 linewidth=1.0,
             ),
@@ -199,32 +198,6 @@ for i, W in enumerate(layers_vis):
             color='black',
             clip_on=False
         )
-
-    # # --- Add annotation for Output layer ---
-    # if i == len(layers_vis) - 1:
-        
-    #     x_start = 0          # start of outputs
-    #     x_end = w - 1        # end of outputs
-    #     x_middle = (x_start + x_end) / 2
-        
-    #     y_bracket = h - 0.5  # just below the image
-
-    #     # 1️⃣ horizontal bracket (clean & straight)
-    #     ax.annotate(
-    #         "actions",
-    #         xy=(x_middle, y_bracket),
-    #         xytext=(x_middle, y_bracket + 5.0),
-    #         arrowprops=dict(
-    #             arrowstyle="<-[,widthB=0.75,lengthB=0.5",
-    #             color="black",
-    #             linewidth=1.0,
-    #             # connectionstyle="arc3,rad=0"
-    #         ),
-    #         fontsize=9,
-    #         color='black',
-    #         ha='center',
-    #         clip_on=False
-    #     )
 
 # Legend
 legend_patches = [
@@ -336,7 +309,7 @@ for s_idx, subtask in enumerate(subtask_list):
         ax.set_title(titles[i], fontsize=10)
         ax.tick_params(axis='both', labelsize=8)
     
-        # --- Add arrow and text for Hidden Layer 0 ---
+        # --- Add annotation for Hidden Layer 0 ---
         if i == 0:
             context = COLOR_TO_IDX[subtask]
             # coordinates for the arrow tip (lowest row, rightmost column)
