@@ -1,5 +1,6 @@
 import os
 from find_many_objects_env import make_ocean_env
+from minigrid.core.constants import COLOR_TO_IDX
 
 import flax.nnx as nnx
 import numpy as np
@@ -151,6 +152,29 @@ for i, W in enumerate(layers_vis):
     ax.set_title(titles[i], fontsize=10)
     ax.tick_params(axis='both', labelsize=8)
 
+     # --- Add arrow and text for Hidden Layer 0 ---
+    if i == 0:
+        # coordinates for the bracket
+        x_bracket = w - 0.5       # slightly outside right edge            # 6 rows from bottom
+        y_middle = h - (1+6)/2
+        
+        # Use annotate with bracket-style arrow
+        # (change magic values below carefully to keep the arrow horizontal)
+        ax.annotate(
+            "context encoding of subtasks",
+            xy=(x_bracket, y_middle),
+            xytext=(x_bracket+4.5, y_middle),
+            arrowprops=dict(
+                arrowstyle="<-[,widthB=1.5,lengthB=0.25,angleB=0",
+                color="black",
+                linewidth=1.0,
+            ),
+            fontsize=9,
+            color='black',
+            va='center',
+            clip_on=False
+        )
+
 # Legend
 legend_patches = [
     mpatches.Patch(color="#C2E1BCB7", label='Shared weights'),
@@ -260,6 +284,22 @@ for s_idx, subtask in enumerate(subtask_list):
 
         ax.set_title(titles[i], fontsize=10)
         ax.tick_params(axis='both', labelsize=8)
+    
+        # --- Add arrow and text for Hidden Layer 0 ---
+        if i == 0:
+            context = COLOR_TO_IDX[subtask]
+            # coordinates for the arrow tip (lowest row, rightmost column)
+            arrow_x = w - 1
+            arrow_y = h - 6 + context
+
+            ax.annotate(
+                f"context encoding of subtask {subtask}",
+                xy=(arrow_x, arrow_y),                  # point of interest
+                xytext=(arrow_x + 5, arrow_y + 0.5),    # text location (to the right)
+                arrowprops=dict(arrowstyle="<-", facecolor='black'),
+                fontsize=9,
+                color='black'
+            )
 
     # Legend
     legend_patches = [
