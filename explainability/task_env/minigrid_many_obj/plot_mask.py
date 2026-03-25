@@ -174,6 +174,57 @@ for i, W in enumerate(layers_vis):
             va='center',
             clip_on=False
         )
+    # --- Add annotation for Output layer ---
+    if i == len(layers_vis) - 1:
+
+        # middle of axis (normalized coords)
+        x_middle = 0.5
+        y_bracket = -0.12
+        y_text = -0.25
+
+        ax.annotate(
+            "actions",
+            xy=(x_middle, y_bracket),          # bottom of axis
+            xycoords=ax.transAxes,
+            xytext=(x_middle, y_text),
+            textcoords=ax.transAxes,
+            ha="center",
+            va="top",
+            arrowprops=dict(
+                arrowstyle="<-[,widthB=0.75,lengthB=0.5",
+                color="black",
+                linewidth=1.0,
+            ),
+            fontsize=9,
+            color='black',
+            clip_on=False
+        )
+
+    # # --- Add annotation for Output layer ---
+    # if i == len(layers_vis) - 1:
+        
+    #     x_start = 0          # start of outputs
+    #     x_end = w - 1        # end of outputs
+    #     x_middle = (x_start + x_end) / 2
+        
+    #     y_bracket = h - 0.5  # just below the image
+
+    #     # 1️⃣ horizontal bracket (clean & straight)
+    #     ax.annotate(
+    #         "actions",
+    #         xy=(x_middle, y_bracket),
+    #         xytext=(x_middle, y_bracket + 5.0),
+    #         arrowprops=dict(
+    #             arrowstyle="<-[,widthB=0.75,lengthB=0.5",
+    #             color="black",
+    #             linewidth=1.0,
+    #             # connectionstyle="arc3,rad=0"
+    #         ),
+    #         fontsize=9,
+    #         color='black',
+    #         ha='center',
+    #         clip_on=False
+    #     )
 
 # Legend
 legend_patches = [
