@@ -106,13 +106,8 @@ for i in range(num_layers):
     used_any = (stacked != 0).any(axis=0)     # union
     used_all = (stacked != 0).all(axis=0)     # intersection
 
-    # Initialize: 0 = black (unused)
     vis = np.zeros_like(used_any, dtype=int)
-
-    # Task-specific (some but not all) → 1 (red)
     vis[used_any & (~used_all)] = 1
-
-    # Shared (all) → 2 (white)
     vis[used_all] = 2
 
     layers_vis.append(vis)
@@ -160,15 +155,30 @@ for i, W in enumerate(layers_vis):
 legend_patches = [
     mpatches.Patch(color="#C2E1BCB7", label='Shared weights'),
     mpatches.Patch(color='green', label='Task-specific weights'),
-    mpatches.Patch(color='white', label='Masked (unused) weights')
+    mpatches.Patch(facecolor='white', edgecolor='grey', linewidth=0.8, label='Masked (unused) weights')
 ]
 
 fig.legend(handles=legend_patches,
-           loc='lower center', bbox_to_anchor=(0.5, 0.02),
-           ncol=3, fontsize=9)
+           loc='lower center', bbox_to_anchor=(0.75, 0.8),
+           ncol=1, fontsize=8)
 
 fig.suptitle("Shared weight across subtasks", fontsize=14)
-
+fig.text(
+        0.5,
+        0.01,
+        f"{plot_info}",
+        ha='center',
+        va='bottom',
+        fontsize=8
+    )
+    # fig.text(
+    #     0.5,
+    #     0.2,
+    #     mask_info,
+    #     ha='left',
+    #     va='bottom',
+    #     fontsize=8
+    # )
 plt.tight_layout(rect=[0, 0.05, 1, 0.95])
 plt.show()
 
@@ -256,15 +266,30 @@ for s_idx, subtask in enumerate(subtask_list):
         mpatches.Patch(color="#C2E1BCB7", label='Shared weights across all tasks'),
         mpatches.Patch(color='green', label='Task-specific weights'),
         # mpatches.Patch(color='grey', label='Used in other subtasks'),
-        mpatches.Patch(color='white', label='Masked (unused) weights')
+        mpatches.Patch(facecolor='white', edgecolor='grey', linewidth=0.8, label='Masked (unused) weights')
     ]
 
     fig.legend(handles=legend_patches,
-               loc='lower center', bbox_to_anchor=(0.5, 0.02),
-               ncol=4, fontsize=9)
+               loc='lower center', bbox_to_anchor=(0.75, 0.8),
+               ncol=1, fontsize=8)
 
     fig.suptitle(f"Subnetwork {subtask}", fontsize=14)
-
+    fig.text(
+        0.5,
+        0.01,
+        f"{plot_info}",
+        ha='center',
+        va='bottom',
+        fontsize=8
+    )
+    # fig.text(
+    #     0.5,
+    #     0.2,
+    #     mask_info,
+    #     ha='left',
+    #     va='bottom',
+    #     fontsize=8
+    # )
     plt.tight_layout(rect=[0, 0.05, 1, 0.95])
     plt.show()
 
