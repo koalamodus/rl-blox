@@ -30,80 +30,73 @@ subnet_colors = {
 
 metric_to_plot = ["Avg Return", "Success Rate"]
 
-tasks = [f"Task {t}" for t in subtasks]
-x_tick_label = [f"task {t}" for t in subtasks]
-n_tasks = len(tasks)
-n_subnets = len(subtasks)
-
-# Bar width
-bar_width = 0.15
-x = np.arange(n_tasks)  # base positions for tasks
-
-fig, axes = plt.subplots(1, 2, figsize=(14, 6), sharey=True)
-
-for ax, metric in zip(axes, metric_to_plot):
-    for i, subtask in enumerate(subtasks):
-        scores = [subnet_scores[subtask][task][metric] for task in tasks]
-        ax.bar(
-            x + i*bar_width,
-            scores,
-            width=bar_width,
-            color=subnet_colors[subtask],
-            label=f"Subnetwork {subtask}"
-        )
-    ax.set_xticks(x + bar_width*(n_subnets-1)/2)
-    ax.set_xticklabels(x_tick_label)
-    ax.set_xlabel("Task")
-    ax.set_title(metric)
-    ax.grid(axis='y')
-
-axes[0].set_ylabel("Performance")
-axes[0].legend()
-
-fig.suptitle("Performance of Subnetworks Across Tasks", fontsize=16)
-plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-plt.show()
-
-# ---------------------------
-# Plot subnetwork performance drop
-# ---------------------------
-
 import matplotlib.pyplot as plt
 import numpy as np
 
+def plot_subnetwork_metrics(data_dict, title, subtasks, subnet_colors, metrics=["Avg Return", "Success Rate"]):
+    """
+    Plots subnetwork metrics in a 2-row figure (Avg Return on top, Success Rate below).
 
-metric_to_plot = ["Avg Return", "Success Rate"]
+    Args:
+        data_dict (dict): nested dictionary of shape data_dict[subtask][task][metric]
+        title (str): suptitle for the figure
+        subtasks (list of str): list of subnetwork names
+        subnet_colors (dict): mapping of subnetwork name to color
+        metrics (list of str): list of metrics to plot (default ["Avg Return", "Success Rate"])
+    """
+    tasks = [f"Task {t}" for t in subtasks]
+    x_tick_label = [f"task {t}" for t in subtasks]
+    y_label= {
+        "Avg Return": "average return",
+        "Success Rate": "success rate"
+    }
+    n_tasks = len(tasks)
+    n_subnets = len(subtasks)
+    bar_width = 0.15
+    x = np.arange(n_tasks)
 
-tasks = [f"Task {t}" for t in subtasks]
-x_tick_label = [f"task {t}" for t in subtasks]
-n_tasks = len(tasks)
-n_subnets = len(subtasks)
+    fig, axes = plt.subplots(2, 1, figsize=(12, 10), sharex=False)
 
-# Bar width and positions
-bar_width = 0.1
-x = np.arange(n_tasks)  # task positions
+    for ax, metric in zip(axes, metrics):
+        for i, subtask in enumerate(subtasks):
+            values = [data_dict[subtask][task][metric] for task in tasks]
+            ax.bar(
+                x + i*bar_width,
+                values,
+                width=bar_width,
+                color=subnet_colors[subtask],
+                label=f"subnetwork {subtask}"
+            )
+        ax.set_ylabel(y_label[metric])
+        ax.grid(axis='y')
+        # ax.set_title(metric)
+        ax.set_xticks(x + bar_width*(n_subnets-1)/2)
+        ax.set_xticklabels(x_tick_label)
 
-fig, axes = plt.subplots(1, 2, figsize=(14, 6), sharey=True)
+    # # X-axis labels only on the bottom subplot
+    # axes[1].set_xticks(x + bar_width*(n_subnets-1)/2)
+    # axes[1].set_xticklabels(x_tick_label)
+    # axes[1].set_xlabel("Task")
 
-for ax, metric in zip(axes, metric_to_plot):
-    for i, subtask in enumerate(subtasks):
-        drops = [performance_drop[subtask][task][metric] for task in tasks]
-        ax.bar(
-            x + i*bar_width,
-            drops,
-            width=bar_width,
-            color=subnet_colors[subtask],
-            label=f"subnetwork {subtask}"
-        )
-    ax.set_xticks(x + bar_width*(n_subnets-1)/2)
-    ax.set_xticklabels(x_tick_label)
-    ax.set_xlabel("Task")
-    ax.set_title(metric)
-    ax.grid(axis='y')
+    # Legend only once (top subplot)
+    axes[0].legend()
+    fig.suptitle(title, fontsize=16)
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    plt.show()
 
-axes[0].set_ylabel("Performance Drop")
-axes[0].legend()
 
-fig.suptitle("Performance Drop of Subnetworks Relative to the Full Network", fontsize=16)
-plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-plt.show()
+plot_subnetwork_metrics(
+    data_dict=subnet_scores,
+    title="Performance of Subnetworks Across Tasks",
+    subtasks=subtasks,
+    subnet_colors=subnet_colors,
+    metrics=metric_to_plot
+)
+
+plot_subnetwork_metrics(
+    data_dict=performance_drop,
+    title="Performance Drop of Subnetworks Relative to the Full Network",
+    subtasks=subtasks,
+    subnet_colors=subnet_colors,
+    metrics=metric_to_plot
+)
