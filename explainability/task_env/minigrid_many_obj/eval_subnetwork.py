@@ -142,27 +142,39 @@ for subtask, drops in performance_drop.items():
 # ---------------------------
 
 import matplotlib.pyplot as plt
+import numpy as np
 
+# Choose metric to plot
+metric_to_plot = "Avg Return"  # or "Success Rate"
 
-metric_to_plot = "Avg Return"
-
-# Prepare data
 tasks = [f"Task {t}" for t in subtasks]
-x = range(len(tasks))
+n_tasks = len(tasks)
+n_subnets = len(subtasks)
 
-fig, ax = plt.subplots(figsize=(8, 5))
+# Bar width and positions
+bar_width = 0.2
+x = np.arange(n_tasks)  # task positions
 
-# Plot performance drop per subtask
-for subtask in subtasks:
+fig, ax = plt.subplots(figsize=(10, 6))
+
+for i, subtask in enumerate(subtasks):
     drops = [performance_drop[subtask][task][metric_to_plot] for task in tasks]
-    ax.plot(x, drops, marker='o', color=subtask, label=f"Subnetwork {subtask}")
+    ax.bar(
+        x + i*bar_width,  # shift bars for each subnetwork
+        drops,
+        width=bar_width,
+        color=subtask,  # use subtask name as color
+        label=f"Subnetwork {subtask}"
+    )
 
-ax.set_xticks(x)
+# X-axis labels in the middle of grouped bars
+ax.set_xticks(x + bar_width*(n_subnets-1)/2)
 ax.set_xticklabels(tasks)
-ax.set_ylabel(f"Performance drop ({metric_to_plot})")
+
+ax.set_ylabel(f"Performance Drop ({metric_to_plot})")
 ax.set_xlabel("Task")
 ax.set_title(f"Performance Drop vs Full Network ({metric_to_plot})")
 ax.legend()
-ax.grid(True)
+ax.grid(axis='y')
 
 plt.show()
