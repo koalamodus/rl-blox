@@ -19,7 +19,7 @@ from rl_blox.blox.function_approximator.mlp import MLP
 # Choose ckpt from pre-trained full q-net
 
 experiment = "reefshield_random_medium"
-randomize_env = True
+randomize_env = False
 seed_num = 0
 file_name = "_minigrid_reefshield_random_medium_DDQN-UTS_1773787402.9864454_q_step_005000000_epoch_5000000"
 model_hidden_nodes = [32, 32]
@@ -138,6 +138,36 @@ for subtask, drops in performance_drop.items():
     print(f"subnetwork {subtask}: {drops}")
 
 # ---------------------------
+# Save evaluation result
+# ---------------------------
+
+import pickle
+
+eval_results = {
+    "full_scores": full_scores,
+    "subnet_scores": subnet_scores,
+    "performance_drop": performance_drop
+}
+
+with open("evaluation_results.pkl", "wb") as f:
+    pickle.dump(eval_results, f)
+
+print("All evaluation results saved in 'evaluation_results.pkl'.")
+
+
+# ---------------------------
+# Load evaluation result
+# ---------------------------
+
+with open("evaluation_results.pkl", "rb") as f:
+    eval_results = pickle.load(f)
+
+full_scores = eval_results["full_scores"]
+subnet_scores = eval_results["subnet_scores"]
+performance_drop = eval_results["performance_drop"]
+
+
+# ---------------------------
 # Plot subnetwork performance
 # ---------------------------
 
@@ -155,6 +185,7 @@ subnet_colors = {
 metric_to_plot = "Avg Return"  # or "Success Rate"
 
 tasks = [f"Task {t}" for t in subtasks]
+x_tick_label = [f"task {t}" for t in subtasks]
 n_tasks = len(tasks)
 n_subnets = len(subtasks)
 
@@ -171,7 +202,7 @@ for i, subtask in enumerate(subtasks):
         drops,
         width=bar_width,
         color=subnet_colors[subtask],
-        label=f"Subnetwork {subtask}"
+        label=f"subnetwork {subtask}"
     )
 
 # X-axis labels in the middle of grouped bars
