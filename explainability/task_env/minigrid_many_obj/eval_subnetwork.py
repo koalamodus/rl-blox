@@ -97,6 +97,7 @@ restored_model_full = checkpointer.restore(ckpt_full_net, abstract_state)
 q_full = nnx.merge(graphdef, restored_model_full)
 policy_full = get_policy_from_q_net(q_full)
 
+print("Evaluate full network")
 full_scores = evaluate_policy_on_task(policy_full, task=subtasks, num_episode=eval_num_episode, seed=seed)
 
 print("Full network evaluation complete.")
@@ -117,6 +118,7 @@ for subtask in subtasks:
     q_sub = nnx.merge(graphdef, restored_model_sub)
     policy_sub = get_policy_from_q_net(q_sub)
 
+    print(f"Evaluate subnetwork {subtask}")
     scores = evaluate_policy_on_task(policy_sub, task=subtasks, num_episode=eval_num_episode, seed=seed)
     subnet_scores[subtask] = scores
 
@@ -133,4 +135,34 @@ for subtask in subtasks:
 print("Subnetwork evaluation complete.")
 print("Performance drop compared to full network:")
 for subtask, drops in performance_drop.items():
-    print(f"{subtask}: {drops}")
+    print(f"subnetwork {subtask}: {drops}")
+
+# ---------------------------
+# Plot subnetwork performance
+# ---------------------------
+
+import matplotlib.pyplot as plt
+
+
+metric_to_plot = "Avg Return"
+
+# Prepare data
+tasks = [f"Task {t}" for t in subtasks]
+x = range(len(tasks))
+
+fig, ax = plt.subplots(figsize=(8, 5))
+
+# Plot performance drop per subtask
+for subtask in subtasks:
+    drops = [performance_drop[subtask][task][metric_to_plot] for task in tasks]
+    ax.plot(x, drops, marker='o', color=subtask, label=f"Subnetwork {subtask}")
+
+ax.set_xticks(x)
+ax.set_xticklabels(tasks)
+ax.set_ylabel(f"Performance drop ({metric_to_plot})")
+ax.set_xlabel("Task")
+ax.set_title(f"Performance Drop vs Full Network ({metric_to_plot})")
+ax.legend()
+ax.grid(True)
+
+plt.show()
