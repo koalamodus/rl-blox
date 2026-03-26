@@ -8,6 +8,7 @@ import jax.random as jr
 seed = 49  # random seed for np and jax
 key = jr.PRNGKey(seed)
 OBJ_COLORS = COLOR_NAMES
+subtasks = ["red", "blue", "purple", "grey"]
 
 # ---------------------------
 # Load trained or pruned network
@@ -18,7 +19,7 @@ from rl_blox.blox.function_approximator.mlp import MLP
 # Choose ckpt from pre-trained full q-net
 
 experiment = "reefshield_random_medium"
-randomize_env = True
+randomize_env = False
 seed_num = 0
 file_name = "_minigrid_reefshield_random_medium_DDQN-UTS_1773787402.9864454_q_step_005000000_epoch_5000000"
 model_hidden_nodes = [32, 32]
@@ -35,51 +36,10 @@ model_hidden_nodes = [32, 32]
 # file_name = "minigrid_reefshield_medium_DDQN-UTS_1773420833.4308155_q_step_001000000_epoch_1000000"
 # model_hidden_nodes = [128, 128]
 
-# Set up ckpt path
-ckpt_full_net = os.path.expanduser(
-    f"~/workspace/XRL/ocean_trained_model/{experiment}/UTS/seed_{seed_num}/{file_name}"
-)
-
-# Set up environment to get input/output shapes
-subtask = "purple"
-env = make_ocean_env(subtask)
-
-step = int(file_name.split("_")[-3])
-ckpt_subnet = os.path.expanduser(
-    f"~/workspace/XRL/ocean_subnet/{experiment}/UTS/seed_{seed_num}/step_{step}/subnetwork_{subtask}"
-)
-
-# choose ckpt path
-task, ckpt_path = f"Pretrained network", ckpt_full_net
-task, ckpt_path = f"Subnetwork {subtask}", ckpt_subnet
-
-plot_info = f"{experiment}, seed {seed_num}, step {step}"
-
-# Recreate MLP with same architecture as training
-hparams_model = dict(
-    n_features=env.observation_space.shape[0],
-    n_outputs=int(env.action_space.n),
-    activation="relu",
-    hidden_nodes=model_hidden_nodes,
-)
-
-# Restore q net from checkpoint
-abstract_mlp = MLP(rngs=nnx.Rngs(seed), **hparams_model)
-graphdef, abstract_state = nnx.split(abstract_mlp)
-
-
-checkpointer = ocp.StandardCheckpointer()
-restored_model = checkpointer.restore(ckpt_path, abstract_state)
-q_net = nnx.merge(graphdef, restored_model)
-
-print("Loaded model checkpoint.")
-
-# ---------------------------
-# Evaluate subnetworks
-# ---------------------------
 
 eval_num_episode = 100 if randomize_env else 1
 
+# Define evaluation function
 from eval_helper import eval_policy
 def evaluate_policy_on_task(policy, task=None, obj_colors=OBJ_COLORS, randomize=randomize_env, num_episode=eval_num_episode, render_mode=None, seed=42, verbose=True):
     if task == None:
@@ -99,8 +59,6 @@ def evaluate_policy_on_task(policy, task=None, obj_colors=OBJ_COLORS, randomize=
         all_task_scores.update(task_score_info)
     return all_task_scores
 
-print("evaluate ckpt network")
-
 def get_policy_from_q_net(q):
 
     def policy(obs):
@@ -108,6 +66,53 @@ def get_policy_from_q_net(q):
 
     return policy
 
+# Set up environment to get input/output shapes
+subtask = "purple"
+env = make_ocean_env(subtask)
 
-policy = get_policy_from_q_net(q_net)
-q_eval_scores = evaluate_policy_on_task(policy, num_episode=eval_num_episode, seed=seed)
+step = int(file_name.split("_")[-3])
+ckpt_subnet = os.path.expanduser(
+    f"~/workspace/XRL/ocean_subnet/{experiment}/UTS/seed_{seed_num}/step_{step}/subnetwork_{subtask}"
+)
+
+# Recreate MLP with same architecture as training
+hparams_model = dict(
+    n_features=env.observation_space.shape[0],
+    n_outputs=int(env.action_space.n),
+    activation="relu",
+    hidden_nodes=model_hidden_nodes,
+)
+
+# Restore q net from checkpoint
+abstract_mlp = MLP(rngs=nnx.Rngs(seed), **hparams_model)
+graphdef, abstract_state = nnx.split(abstract_mlp)
+
+checkpointer = ocp.StandardCheckpointer()
+
+# Set up ckpt path
+ckpt_full_net = os.path.expanduser(
+    f"~/workspace/XRL/ocean_trained_model/{experiment}/UTS/seed_{seed_num}/{file_name}"
+)
+restored_model_full = checkpointer.restore(ckpt_full_net, abstract_state)
+q_full = nnx.merge(graphdef, restored_model_full)
+policy_full = get_policy_from_q_net(q_full)
+
+full_scores = evaluate_policy_on_task(policy_full, task=subtasks, num_episode=eval_num_episode, seed=seed)
+
+print("Full network evaluation complete.")
+
+# ---------------------------
+# Evaluate subnetworks
+# ---------------------------
+step = int(file_name.split("_")[-3])
+ckpt_subnet = os.path.expanduser(
+    f"~/workspace/XRL/ocean_subnet/{experiment}/UTS/seed_{seed_num}/step_{step}/subnetwork_{subtask}"
+)
+
+restored_model_sub = checkpointer.restore(ckpt_subnet, abstract_state)
+q_sub = nnx.merge(graphdef, restored_model_sub)
+policy_sub = get_policy_from_q_net(q_sub)
+
+scores = evaluate_policy_on_task(policy_sub, task=subtasks, num_episode=eval_num_episode, seed=seed)
+
+print("Subnetwork evaluation complete.")
