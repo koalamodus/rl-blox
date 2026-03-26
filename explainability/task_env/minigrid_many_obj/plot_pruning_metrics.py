@@ -29,4 +29,6 @@ plt.xlabel("Step")
 plt.ylabel("Remaining weights (%)")
 plt.title("Subnetwork Weights Retained During Pruning")
 plt.legend()
+
+plt.xlim(left=0)
 plt.show()
