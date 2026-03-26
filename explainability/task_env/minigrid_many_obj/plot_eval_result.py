@@ -29,6 +29,7 @@ subnet_colors = {
 }
 
 metric_to_plot = ["Avg Return", "Success Rate"]
+font_size=18
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -77,13 +78,13 @@ def plot_subnetwork_metrics(data_dict, title, subtasks, subnet_colors, metrics=[
                 values,
                 width=bar_width,
                 color=subnet_colors[subtask],
-                label=f"subnetwork {subtask}"
+                label=f"subnetwork {subtask}",
             )
-        ax.set_ylabel(y_label[metric])
+        ax.set_ylabel(y_label[metric], fontsize=font_size)
         ax.grid(axis='y')
         # ax.set_title(metric)
         ax.set_xticks(x + bar_width*(n_subnets-1)/2)
-        ax.set_xticklabels(x_tick_label)
+        ax.set_xticklabels(x_tick_label, fontsize=font_size)
 
     # # X-axis labels only on the bottom subplot
     # axes[1].set_xticks(x + bar_width*(n_subnets-1)/2)
@@ -91,7 +92,7 @@ def plot_subnetwork_metrics(data_dict, title, subtasks, subnet_colors, metrics=[
     # axes[1].set_xlabel("Task")
 
     # Legend only once (top subplot)
-    axes[0].legend()
+    axes[0].legend(fontsize=font_size)
     fig.suptitle(title, fontsize=16)
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     plt.show()
@@ -154,16 +155,16 @@ def plot_network_metrics(data_dict, title, metrics=["Avg Return", "Success Rate"
             values,
             width=bar_width,
             color=color,
-            label=network_name
+            label=network_name,
         )
-        ax.set_ylabel(y_label[metric])
+        ax.set_ylabel(y_label[metric], fontsize=font_size)
         ax.grid(axis='y')
 
     axes[1].set_xticks(x)
-    axes[1].set_xticklabels(x_tick_label)
+    axes[1].set_xticklabels(x_tick_label, fontsize=font_size)
     # axes[1].set_xlabel("Task")
 
-    axes[0].legend()
+    axes[0].legend(fontsize=font_size)
     fig.suptitle(title, fontsize=16)
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     plt.show()
