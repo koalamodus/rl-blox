@@ -112,3 +112,65 @@ plot_subnetwork_metrics(
     subnet_colors=subnet_colors,
     metrics=metric_to_plot
 )
+
+
+# ---------------------------
+# Plot full network performance
+# ---------------------------
+full_network_color = "#444444"
+
+def plot_network_metrics(data_dict, title, metrics=["Avg Return", "Success Rate"], network_name="Full Network", color="black"):
+    """
+    Plots network metrics in a 2-row figure (Avg Return on top, Success Rate below) for a single network.
+
+    Args:
+        data_dict (dict): dictionary of shape data_dict[task][metric]
+        title (str): figure title
+        metrics (list of str): metrics to plot (default ["Avg Return", "Success Rate"])
+        network_name (str): name to show in legend
+        color (str): color for bars
+    """
+    # Determine if the figure is relative (performance drop)
+    is_relative = "Relative" in title
+
+    # Mapping from metric to y-axis label
+    y_label = {
+        "Avg Return": ("relative " if is_relative else "") + "average return" + (" (%)" if is_relative else ""),
+        "Success Rate": ("relative " if is_relative else "") + "success rate" + (" (%)" if is_relative else "")
+    }
+
+    tasks = list(data_dict.keys())
+    x_tick_label = [f"task {t.split('Task ')[-1]}" for t in tasks]  # nicer labels
+    n_tasks = len(tasks)
+    x = np.arange(n_tasks)
+    bar_width = 0.15  # single bar per task
+
+    fig, axes = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
+
+    for ax, metric in zip(axes, metrics):
+        values = [data_dict[task][metric] for task in tasks]
+        ax.bar(
+            x,
+            values,
+            width=bar_width,
+            color=color,
+            label=network_name
+        )
+        ax.set_ylabel(y_label[metric])
+        ax.grid(axis='y')
+
+    axes[1].set_xticks(x)
+    axes[1].set_xticklabels(x_tick_label)
+    # axes[1].set_xlabel("Task")
+
+    axes[0].legend()
+    fig.suptitle(title, fontsize=16)
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    plt.show()
+
+plot_network_metrics(
+    data_dict=full_scores,
+    title="Performance of Full Network Across Tasks",
+    network_name="Full Network",
+    color=full_network_color
+)
