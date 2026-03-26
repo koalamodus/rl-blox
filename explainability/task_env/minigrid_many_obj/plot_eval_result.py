@@ -44,12 +44,24 @@ def plot_subnetwork_metrics(data_dict, title, subtasks, subnet_colors, metrics=[
         subnet_colors (dict): mapping of subnetwork name to color
         metrics (list of str): list of metrics to plot (default ["Avg Return", "Success Rate"])
     """
+
+    # Determine if the figure is relative (performance drop)
+    is_relative = "Relative" in title
+
+    # Mapping from metric to y-axis label
+    if is_relative:
+        y_label = {
+            "Avg Return": "relative average return (%)",
+            "Success Rate": "relative success rate (%)"
+        }
+    else:
+        y_label = {
+            "Avg Return": "average return",
+            "Success Rate": "success rate"
+        }
+
     tasks = [f"Task {t}" for t in subtasks]
     x_tick_label = [f"task {t}" for t in subtasks]
-    y_label= {
-        "Avg Return": "average return",
-        "Success Rate": "success rate"
-    }
     n_tasks = len(tasks)
     n_subnets = len(subtasks)
     bar_width = 0.15
