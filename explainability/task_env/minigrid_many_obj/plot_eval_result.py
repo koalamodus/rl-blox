@@ -35,6 +35,50 @@ x_tick_label = [f"task {t}" for t in subtasks]
 n_tasks = len(tasks)
 n_subnets = len(subtasks)
 
+# Bar width
+bar_width = 0.15
+x = np.arange(n_tasks)  # base positions for tasks
+
+fig, axes = plt.subplots(1, 2, figsize=(14, 6), sharey=True)
+
+for ax, metric in zip(axes, metric_to_plot):
+    for i, subtask in enumerate(subtasks):
+        scores = [subnet_scores[subtask][task][metric] for task in tasks]
+        ax.bar(
+            x + i*bar_width,
+            scores,
+            width=bar_width,
+            color=subnet_colors[subtask],
+            label=f"Subnetwork {subtask}"
+        )
+    ax.set_xticks(x + bar_width*(n_subnets-1)/2)
+    ax.set_xticklabels(x_tick_label)
+    ax.set_xlabel("Task")
+    ax.set_title(metric)
+    ax.grid(axis='y')
+
+axes[0].set_ylabel("Performance")
+axes[0].legend()
+
+fig.suptitle("Performance of Subnetworks Across Tasks", fontsize=16)
+plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+plt.show()
+
+# ---------------------------
+# Plot subnetwork performance drop
+# ---------------------------
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+
+metric_to_plot = ["Avg Return", "Success Rate"]
+
+tasks = [f"Task {t}" for t in subtasks]
+x_tick_label = [f"task {t}" for t in subtasks]
+n_tasks = len(tasks)
+n_subnets = len(subtasks)
+
 # Bar width and positions
 bar_width = 0.1
 x = np.arange(n_tasks)  # task positions
