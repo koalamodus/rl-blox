@@ -32,8 +32,8 @@ for metric in metrics:
 
     plt.plot(steps, values, color=subnet_colors[subtask], label=f"task {subtask}")
 
-plt.xlabel("Step")
-plt.ylabel("Remaining weights (%)")
+plt.xlabel("step")
+plt.ylabel("remaining weights (%)")
 plt.title("Subnetwork Weights Retained During Pruning")
 plt.legend()
 
