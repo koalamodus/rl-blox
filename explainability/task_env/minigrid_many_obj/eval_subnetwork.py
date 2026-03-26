@@ -19,7 +19,7 @@ from rl_blox.blox.function_approximator.mlp import MLP
 # Choose ckpt from pre-trained full q-net
 
 experiment = "reefshield_random_medium"
-randomize_env = False
+randomize_env = True
 seed_num = 0
 file_name = "_minigrid_reefshield_random_medium_DDQN-UTS_1773787402.9864454_q_step_005000000_epoch_5000000"
 model_hidden_nodes = [32, 32]
@@ -144,6 +144,13 @@ for subtask, drops in performance_drop.items():
 import matplotlib.pyplot as plt
 import numpy as np
 
+subnet_colors = {
+    "red": "#FF6666",      # moderately light red
+    "blue": "#66B2FF",     # moderately light blue
+    "purple": "#A566FF",   # moderately light purple
+    "grey": "#999999"      # moderately light grey
+}
+
 # Choose metric to plot
 metric_to_plot = "Avg Return"  # or "Success Rate"
 
@@ -152,7 +159,7 @@ n_tasks = len(tasks)
 n_subnets = len(subtasks)
 
 # Bar width and positions
-bar_width = 0.2
+bar_width = 0.1
 x = np.arange(n_tasks)  # task positions
 
 fig, ax = plt.subplots(figsize=(10, 6))
@@ -163,7 +170,7 @@ for i, subtask in enumerate(subtasks):
         x + i*bar_width,  # shift bars for each subnetwork
         drops,
         width=bar_width,
-        color=subtask,  # use subtask name as color
+        color=subnet_colors[subtask],
         label=f"Subnetwork {subtask}"
     )
 
@@ -173,7 +180,7 @@ ax.set_xticklabels(tasks)
 
 ax.set_ylabel(f"Performance Drop ({metric_to_plot})")
 ax.set_xlabel("Task")
-ax.set_title(f"Performance Drop vs Full Network ({metric_to_plot})")
+ax.set_title(f"Performance Drop of Subnetworks Relative to the Full Network ({metric_to_plot})")
 ax.legend()
 ax.grid(axis='y')
 
