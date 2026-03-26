@@ -19,7 +19,7 @@ from rl_blox.blox.function_approximator.mlp import MLP
 # Choose ckpt from pre-trained full q-net
 
 experiment = "reefshield_random_medium"
-randomize_env = False
+randomize_env = True
 seed_num = 0
 file_name = "_minigrid_reefshield_random_medium_DDQN-UTS_1773787402.9864454_q_step_005000000_epoch_5000000"
 model_hidden_nodes = [32, 32]
@@ -181,8 +181,7 @@ subnet_colors = {
     "grey": "#999999"      # moderately light grey
 }
 
-# Choose metric to plot
-metric_to_plot = "Avg Return"  # or "Success Rate"
+metric_to_plot = ["Avg Return", "Success Rate"]
 
 tasks = [f"Task {t}" for t in subtasks]
 x_tick_label = [f"task {t}" for t in subtasks]
@@ -193,26 +192,27 @@ n_subnets = len(subtasks)
 bar_width = 0.1
 x = np.arange(n_tasks)  # task positions
 
-fig, ax = plt.subplots(figsize=(10, 6))
+fig, axes = plt.subplots(1, 2, figsize=(14, 6), sharey=True)
 
-for i, subtask in enumerate(subtasks):
-    drops = [performance_drop[subtask][task][metric_to_plot] for task in tasks]
-    ax.bar(
-        x + i*bar_width,  # shift bars for each subnetwork
-        drops,
-        width=bar_width,
-        color=subnet_colors[subtask],
-        label=f"subnetwork {subtask}"
-    )
+for ax, metric in zip(axes, metric_to_plot):
+    for i, subtask in enumerate(subtasks):
+        drops = [performance_drop[subtask][task][metric] for task in tasks]
+        ax.bar(
+            x + i*bar_width,
+            drops,
+            width=bar_width,
+            color=subnet_colors[subtask],
+            label=f"subnetwork {subtask}"
+        )
+    ax.set_xticks(x + bar_width*(n_subnets-1)/2)
+    ax.set_xticklabels(x_tick_label)
+    ax.set_xlabel("Task")
+    ax.set_title(metric)
+    ax.grid(axis='y')
 
-# X-axis labels in the middle of grouped bars
-ax.set_xticks(x + bar_width*(n_subnets-1)/2)
-ax.set_xticklabels(tasks)
+axes[0].set_ylabel("Performance Drop")
+axes[0].legend()
 
-ax.set_ylabel(f"Performance Drop ({metric_to_plot})")
-ax.set_xlabel("Task")
-ax.set_title(f"Performance Drop of Subnetworks Relative to the Full Network ({metric_to_plot})")
-ax.legend()
-ax.grid(axis='y')
-
+fig.suptitle("Performance Drop of Subnetworks Relative to the Full Network", fontsize=16)
+plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 plt.show()
