@@ -125,7 +125,7 @@ for subtask in subtasks:
     # Compute performance drop relative to full network
     drop = {
         f"Task {t}": {
-            metric: full_scores[f"Task {t}"][metric] - scores[f"Task {t}"][metric]
+            metric: scores[f"Task {t}"][metric] / full_scores[f"Task {t}"][metric] 
             for metric in full_scores[f"Task {t}"]
         }
         for t in subtasks
