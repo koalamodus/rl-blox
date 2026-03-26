@@ -104,15 +104,33 @@ print("Full network evaluation complete.")
 # ---------------------------
 # Evaluate subnetworks
 # ---------------------------
-step = int(file_name.split("_")[-3])
-ckpt_subnet = os.path.expanduser(
-    f"~/workspace/XRL/ocean_subnet/{experiment}/UTS/seed_{seed_num}/step_{step}/subnetwork_{subtask}"
-)
+subnet_scores = {}
+performance_drop = {}
 
-restored_model_sub = checkpointer.restore(ckpt_subnet, abstract_state)
-q_sub = nnx.merge(graphdef, restored_model_sub)
-policy_sub = get_policy_from_q_net(q_sub)
+for subtask in subtasks:
+    step = int(file_name.split("_")[-3])
+    ckpt_subnet = os.path.expanduser(
+        f"~/workspace/XRL/ocean_subnet/{experiment}/UTS/seed_{seed_num}/step_{step}/subnetwork_{subtask}"
+    )
 
-scores = evaluate_policy_on_task(policy_sub, task=subtasks, num_episode=eval_num_episode, seed=seed)
+    restored_model_sub = checkpointer.restore(ckpt_subnet, abstract_state)
+    q_sub = nnx.merge(graphdef, restored_model_sub)
+    policy_sub = get_policy_from_q_net(q_sub)
+
+    scores = evaluate_policy_on_task(policy_sub, task=subtasks, num_episode=eval_num_episode, seed=seed)
+    subnet_scores[subtask] = scores
+
+    # Compute performance drop relative to full network
+    drop = {
+        f"Task {t}": {
+            metric: full_scores[f"Task {t}"][metric] - scores[f"Task {t}"][metric]
+            for metric in full_scores[f"Task {t}"]
+        }
+        for t in subtasks
+    }
+    performance_drop[subtask] = drop
 
 print("Subnetwork evaluation complete.")
+print("Performance drop compared to full network:")
+for subtask, drops in performance_drop.items():
+    print(f"{subtask}: {drops}")
