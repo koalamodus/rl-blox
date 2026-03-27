@@ -19,6 +19,10 @@ COLOR_NAMES = subtasks
 # Used to map colors to integers
 COLOR_TO_IDX = {"red": 0, "blue": 1, "green": 2, "black": 3}
 
+num_current_context = 2
+num_task_context = 4
+
+
 # ---------------------------
 # (1) Load trained network
 # ---------------------------
@@ -171,7 +175,7 @@ for i, W in enumerate(layers_vis):
     # --- Add annotation for Hidden Layer 0 ---
     if i == 0:
         x_axes = 1.02
-        y_axes = (6/2) / h
+        y_axes = 1 - (num_current_context+num_task_context/2) / h
 
         ax.annotate(
             "context encoding of subtasks",
@@ -180,7 +184,7 @@ for i, W in enumerate(layers_vis):
             xytext=(x_axes + 0.15, y_axes),
             textcoords=ax.transAxes,
             arrowprops=dict(
-                arrowstyle="<-[,widthB=1.5,lengthB=0.3",
+                arrowstyle="<-[,widthB=1.0,lengthB=0.3",
                 color="black",
                 linewidth=1.0,
             ),
@@ -330,7 +334,7 @@ for s_idx, subtask in enumerate(subtask_list):
             context = COLOR_TO_IDX[subtask]
             # coordinates for the arrow tip (lowest row, rightmost column)
             arrow_x = w - 1
-            arrow_y = h - 6 + context
+            arrow_y = num_current_context + context
 
             ax.annotate(
                 f"context encoding of subtask {subtask}",
