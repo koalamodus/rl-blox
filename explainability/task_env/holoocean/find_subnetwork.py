@@ -224,6 +224,9 @@ print("Loaded model checkpoint.")
 def get_policy_from_q_net(q):
 
     def policy(obs):
+        # print(f"q_values: {q([obs])}")
+        # print(f"argmax: {jnp.argmax(q([obs]))}")
+        # print(f"action: {int(jnp.argmax(q([obs])))}")
         return int(jnp.argmax(q([obs])))
 
     return policy
@@ -510,6 +513,7 @@ def sample_state(env, subtask=None, batch_size=128, key=jr.PRNGKey(seed)):
     # Get the observation space bounds
     low = jnp.array(env.observation_space.low)
     high = jnp.array(env.observation_space.high)
+    # print(f"low.shape[0]: {low.shape[0]}, high.shape[0]: {high.shape[0]}")
 
     # low and high are currently 0 and 255, but in env it is 0 and 6
     key, subkey = jr.split(key)
@@ -559,6 +563,7 @@ def sample_state(env, subtask=None, batch_size=128, key=jr.PRNGKey(seed)):
     # Broadcast the one-hot context to the batch
     # Replace the last 6 elements of every row in `state`
     state = state.at[:, num_current_context:(num_current_context+one_hot_length)].set(one_hot_context)
+    # print(f"state: {state}")
 
     return state
 
@@ -709,6 +714,7 @@ while True:
     key, subkey = jr.split(key)
     obs = sample_state(env, subtask, hparams_algorithm.get("batch_size"), key=subkey)
     print(f"obs: {obs}")
+    # TODO: fix action, get_policy_from_q_net return argmax from position index counted from all batches and return only one action
     action = subnet_policy(obs)
     print(f"action: {action}")
     time.sleep(1)
