@@ -19,11 +19,11 @@ import numpy as np
 from types import SimpleNamespace
 from gymnasium.spaces import Box, Discrete
 
-subtasks = ["red", "blue", "purple", "black"]
+subtasks = ["red", "blue", "green", "black"]
 COLOR_NAMES = subtasks
 
 # Used to map colors to integers
-COLOR_TO_IDX = {"red": 0, "blue": 1, "purple": 2, "black": 3}
+COLOR_TO_IDX = {"red": 0, "blue": 1, "green": 2, "black": 3}
 # context = COLOR_TO_IDX[color]
 
 min_array = jnp.array(
@@ -515,7 +515,7 @@ def sample_state(env, subtask=None, batch_size=128, key=jr.PRNGKey(seed)):
     key, subkey = jr.split(key)
 
     # Sample a batch of states uniformly
-    state = jax.random.randint(
+    state = jax.random.uniform(
         subkey,
         shape=(batch_size, low.shape[0]),
         minval=low,
@@ -551,13 +551,14 @@ def sample_state(env, subtask=None, batch_size=128, key=jr.PRNGKey(seed)):
     # state = state.at[:, -1].set(context_batch)
 
     # One-hot context
-    one_hot_length = 6
+    num_current_context = 2
+    one_hot_length = len(obj_colors)
     one_hot_context = jnp.zeros(one_hot_length)
-    one_hot_context = one_hot_context.at[context].set(1)  # JAX-friendly
+    one_hot_context = one_hot_context.at[context].set(1.0)  # JAX-friendly
 
     # Broadcast the one-hot context to the batch
     # Replace the last 6 elements of every row in `state`
-    state = state.at[:, -one_hot_length:].set(one_hot_context)
+    state = state.at[:, num_current_context:(num_current_context+one_hot_length)].set(one_hot_context)
 
     return state
 

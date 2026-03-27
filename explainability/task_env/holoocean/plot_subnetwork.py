@@ -45,7 +45,8 @@ ckpt_full_net = os.path.expanduser(
 )
 
 # Set up environment to get input/output shapes
-subtask = "purple"
+subtasks = ["red", "blue", "green", "black"]
+subtask = subtasks[0]
 # env = make_ocean_env(subtask)
 
 step = int(file_name.split("_")[-3])

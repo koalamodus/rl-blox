@@ -13,11 +13,11 @@ plot_mask_only = True
 # ---------------------------
 # TODO: use real environment
 
-subtasks = ["red", "blue", "purple", "black"]
+subtasks = ["red", "blue", "green", "black"]
 COLOR_NAMES = subtasks
 
 # Used to map colors to integers
-COLOR_TO_IDX = {"red": 0, "blue": 1, "purple": 2, "black": 3}
+COLOR_TO_IDX = {"red": 0, "blue": 1, "green": 2, "black": 3}
 
 # ---------------------------
 # (1) Load trained network
@@ -60,7 +60,7 @@ step = int(file_name.split("_")[-3])
 plot_info = f"{experiment}, seed {seed_num}, step {step}"
 
 # Set up environment to get input/output shapes
-subtask = "purple"
+subtask = subtasks[0]
 # env = make_ocean_env(subtask)
 
 # Recreate MLP with same architecture as training
