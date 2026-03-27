@@ -1,5 +1,5 @@
 import os
-from find_many_objects_env import make_ocean_env
+# from find_many_objects_env import make_ocean_env
 
 import flax.nnx as nnx
 import jax.random as jr
@@ -15,11 +15,11 @@ from rl_blox.blox.function_approximator.mlp import MLP
 
 # Choose ckpt from pre-trained full q-net
 
-experiment = "reefshield_random_medium"
-randomize_env = True
-seed_num = 0
-file_name = "_minigrid_reefshield_random_medium_DDQN-UTS_1773787402.9864454_q_step_005000000_epoch_5000000"
-model_hidden_nodes = [32, 32]
+# experiment = "reefshield_random_medium"
+# randomize_env = True
+# seed_num = 0
+# file_name = "_minigrid_reefshield_random_medium_DDQN-UTS_1773787402.9864454_q_step_005000000_epoch_5000000"
+# model_hidden_nodes = [32, 32]
 
 # experiment = "reefshield_fixed_medium"
 # randomize_env = False
@@ -33,6 +33,12 @@ model_hidden_nodes = [32, 32]
 # file_name = "minigrid_reefshield_medium_DDQN-UTS_1773420833.4308155_q_step_001000000_epoch_1000000"
 # model_hidden_nodes = [128, 128]
 
+experiment = "holoocean"
+randomize_env = True
+seed_num = 0
+file_name = "_minigrid_holoocean_medium_DDQN-UTS_1774215135.9690797_q_step_000250000_epoch_250000"
+model_hidden_nodes = [128, 128]
+
 # Set up ckpt path
 ckpt_full_net = os.path.expanduser(
     f"~/workspace/XRL/ocean_trained_model/{experiment}/UTS/seed_{seed_num}/{file_name}"
@@ -40,7 +46,7 @@ ckpt_full_net = os.path.expanduser(
 
 # Set up environment to get input/output shapes
 subtask = "purple"
-env = make_ocean_env(subtask)
+# env = make_ocean_env(subtask)
 
 step = int(file_name.split("_")[-3])
 ckpt_subnet = os.path.expanduser(
@@ -55,8 +61,8 @@ plot_info = f"{experiment}, seed {seed_num}, step {step}"
 
 # Recreate MLP with same architecture as training
 hparams_model = dict(
-    n_features=env.observation_space.shape[0],
-    n_outputs=int(env.action_space.n),
+    n_features=50,
+    n_outputs=5,
     activation="relu",
     hidden_nodes=model_hidden_nodes,
 )

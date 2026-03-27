@@ -1,6 +1,6 @@
 import os
-from minigrid.core.constants import COLOR_NAMES, COLOR_TO_IDX
-from find_many_objects_env import make_ocean_env
+# from minigrid.core.constants import COLOR_NAMES, COLOR_TO_IDX
+# from find_many_objects_env import make_ocean_env
 
 import jax
 import flax.nnx as nnx
@@ -11,6 +11,153 @@ seed = 49  # random seed for np and jax
 key = jr.PRNGKey(seed)
 
 # ---------------------------
+# (1) HoloOcean env params
+# ---------------------------
+# TODO: use real environment
+
+import numpy as np
+from types import SimpleNamespace
+from gymnasium.spaces import Box, Discrete
+
+subtasks = ["red", "blue", "purple", "black"]
+COLOR_NAMES = subtasks
+
+# Used to map colors to integers
+COLOR_TO_IDX = {"red": 0, "blue": 1, "purple": 2, "black": 3}
+# context = COLOR_TO_IDX[color]
+
+min_array = jnp.array(
+            [
+                -10,
+                -10,
+                # -300,
+                0,
+                0,
+                0,
+                -10,
+                -10,
+                # -10,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+            ], dtype=np.float32
+        )
+max_array = jnp.array(
+            [
+                10,
+                10,
+                # 0,
+                0,
+                0,
+                0,
+                -10,
+                -10,
+                # -10,
+                200,
+                500,
+                500,
+                500,
+                500,
+                500,
+                500,
+                500,
+                500,
+                500,
+                500,
+                500,
+                500,
+                500,
+                500,
+                500,
+                500,
+                500,
+                500,
+                500,
+                500,
+                500,
+                500,
+                500,
+                500,
+                500,
+                500,
+                500,
+                500,
+                500,
+                500,
+                500,
+                500,
+                1,
+                1,
+                1,
+                1,
+            ], dtype=np.float32
+        )
+
+# context_in_obs=True
+max_array = np.concatenate([np.ones(6, dtype=np.float32), max_array])
+min_array = np.concatenate([np.array([-1, -1, 0, 0, 0, 0], dtype=np.float32), min_array])
+
+# env = {}
+# env.observation_space.high = max_array
+# env.observation_space.low = min_array
+# env.action_space.n = 5
+# env.observation_space.shape[0] = len(max_array)
+
+# env = {}
+# env["max_array"] = max_array
+# env["min_array"] = min_array
+# env["action_space"] = {"n": 5}
+# env["observation_space"] = {"shape": [len(max_array)]}
+
+
+
+env = SimpleNamespace()
+
+# min_array = np.array([0, 0, 0], dtype=np.float32)
+# max_array = np.array([1, 1, 1], dtype=np.float32)
+
+env.observation_space = Box(low=min_array, high=max_array, dtype=np.float32)
+env.action_space = Discrete(5)
+
+# print(f"max_array: {env.observation_space.high}")
+# print(f"min_array: {env.observation_space.low}")
+print(f"n_features: {env.observation_space.shape[0]}")
+print(f"n_outputs: {int(env.action_space.n)}")
+# ---------------------------
 # (1) Load trained network
 # ---------------------------
 import orbax.checkpoint as ocp
@@ -18,11 +165,11 @@ from rl_blox.blox.function_approximator.mlp import MLP
 
 # Choose ckpt
 
-experiment = "reefshield_random_medium"
-randomize_env = True
-seed_num = 0
-file_name = "_minigrid_reefshield_random_medium_DDQN-UTS_1773787402.9864454_q_step_005000000_epoch_5000000"
-model_hidden_nodes = [32, 32]
+# experiment = "reefshield_random_medium"
+# randomize_env = True
+# seed_num = 0
+# file_name = "_minigrid_reefshield_random_medium_DDQN-UTS_1773787402.9864454_q_step_005000000_epoch_5000000"
+# model_hidden_nodes = [32, 32]
 
 # experiment = "reefshield_fixed_medium"
 # randomize_env = False
@@ -36,6 +183,12 @@ model_hidden_nodes = [32, 32]
 # file_name = "minigrid_reefshield_medium_DDQN-UTS_1773420833.4308155_q_step_001000000_epoch_1000000"
 # model_hidden_nodes = [128, 128]
 
+experiment = "holoocean"
+randomize_env = True
+seed_num = 0
+file_name = "_minigrid_holoocean_medium_DDQN-UTS_1774215135.9690797_q_step_000250000_epoch_250000"
+model_hidden_nodes = [128, 128]
+
 # Set up ckpt path
 ckpt_path = os.path.expanduser(
     f"~/workspace/XRL/ocean_trained_model/{experiment}/UTS/seed_{seed_num}/{file_name}"
@@ -44,9 +197,9 @@ ckpt_path = os.path.expanduser(
 # Set up environment to get input/output shapes
 OBJ_COLORS = COLOR_NAMES
 # subtask = None
-subtask = "red"
+subtask = subtasks[0]
 env_name = f"ocean_{subtask}_{experiment}"
-env = make_ocean_env(subtask)
+# env = make_ocean_env(subtask)
 
 # Recreate MLP with same architecture as training
 hparams_model = dict(
@@ -78,29 +231,29 @@ def get_policy_from_q_net(q):
 
 policy = get_policy_from_q_net(q)
 
-eval_num_episode = 20 if randomize_env else 1
+# eval_num_episode = 20 if randomize_env else 1
 
-from eval_helper import eval_policy
-def evaluate_policy_on_task(policy, task=None, obj_colors=OBJ_COLORS, randomize=randomize_env, num_episode=eval_num_episode, render_mode=None, seed=42, verbose=True):
-    if task == None:
-        task = obj_colors
-    else:
-        task = task if isinstance(task, list) else [task]
+# from eval_helper import eval_policy
+# def evaluate_policy_on_task(policy, task=None, obj_colors=OBJ_COLORS, randomize=randomize_env, num_episode=eval_num_episode, render_mode=None, seed=42, verbose=True):
+#     if task == None:
+#         task = obj_colors
+#     else:
+#         task = task if isinstance(task, list) else [task]
     
-    all_task_scores = {}  # store results for all colors
+#     all_task_scores = {}  # store results for all colors
 
-    for target_color in task:
-        assert target_color in COLOR_NAMES
+#     for target_color in task:
+#         assert target_color in COLOR_NAMES
 
-        eval_env = make_ocean_env(target_color, randomize, render_mode)
-        task_score_info = eval_policy(target_color, eval_env, policy, verbose=verbose, num_episode=num_episode, seed=seed)
-        eval_env.close()
+#         eval_env = make_ocean_env(target_color, randomize, render_mode)
+#         task_score_info = eval_policy(target_color, eval_env, policy, verbose=verbose, num_episode=num_episode, seed=seed)
+#         eval_env.close()
 
-        all_task_scores.update(task_score_info)
-    return all_task_scores
+#         all_task_scores.update(task_score_info)
+#     return all_task_scores
 
-print("evaluate original q network")
-q_eval_scores = evaluate_policy_on_task(policy, seed=seed)
+# print("evaluate original q network")
+# q_eval_scores = evaluate_policy_on_task(policy, seed=seed)
 
 
 # ---------------------------
@@ -331,10 +484,10 @@ logger.define_experiment(
 )
 
 logger.run.log_info(f"random seed: {seed}")
-logger.run.log_info(f"number of episode in evaluation: {eval_num_episode}")
+# logger.run.log_info(f"number of episode in evaluation: {eval_num_episode}")
 
-logger.run.log_info("evaluate original q network")
-logger.run.log_info(f"{q_eval_scores}")
+# logger.run.log_info("evaluate original q network")
+# logger.run.log_info(f"{q_eval_scores}")
 
 threshold_eval = hparams_algorithm.get("threshold_eval")
 
@@ -465,26 +618,26 @@ for step in tqdm(range(1, hparams_algorithm.get("total_timesteps") + 1), desc="T
         # Update the new MLP with pruned parameters
         nnx.update(q_pruned, pruned_state)
         
-        # Evaluate the subnetwork policy
-        subnet_policy = get_policy_from_q_net(q_pruned)
-        all_task_scores = evaluate_policy_on_task(subnet_policy, seed=seed+1, verbose=False)
+        # # Evaluate the subnetwork policy
+        # subnet_policy = get_policy_from_q_net(q_pruned)
+        # all_task_scores = evaluate_policy_on_task(subnet_policy, seed=seed+1, verbose=False)
 
-        # Log eval result
-        for color, eval_metrics in all_task_scores.items():
-            logger.record_stat(
-                f"{color} avg return", eval_metrics["Avg Return"], step=step + 1
-            )
-            logger.record_stat(
-                f"{color} success rate", eval_metrics["Success Rate"], step=step + 1
-            )
-            if q_eval_scores[color]["Avg Return"] != 0:
-                logger.record_stat(
-                    f"{color} avg return (relative to original q network)", eval_metrics["Avg Return"]/q_eval_scores[color]["Avg Return"], step=step + 1
-                )
-            if q_eval_scores[color]["Success Rate"] != 0:
-                logger.record_stat(
-                    f"{color} success rate (relative to original q network)s", eval_metrics["Success Rate"]/q_eval_scores[color]["Success Rate"], step=step + 1
-                )
+        # # Log eval result
+        # for color, eval_metrics in all_task_scores.items():
+        #     logger.record_stat(
+        #         f"{color} avg return", eval_metrics["Avg Return"], step=step + 1
+        #     )
+        #     logger.record_stat(
+        #         f"{color} success rate", eval_metrics["Success Rate"], step=step + 1
+        #     )
+        #     if q_eval_scores[color]["Avg Return"] != 0:
+        #         logger.record_stat(
+        #             f"{color} avg return (relative to original q network)", eval_metrics["Avg Return"]/q_eval_scores[color]["Avg Return"], step=step + 1
+        #         )
+        #     if q_eval_scores[color]["Success Rate"] != 0:
+        #         logger.record_stat(
+        #             f"{color} success rate (relative to original q network)s", eval_metrics["Success Rate"]/q_eval_scores[color]["Success Rate"], step=step + 1
+        #         )
 
     if step % 1 == 0 and step > 10000:
         # early stopping
@@ -492,8 +645,8 @@ for step in tqdm(range(1, hparams_algorithm.get("total_timesteps") + 1), desc="T
             print(f"step={step} loss={loss_val:.6f} q_diff_loss={training_metrics['q_diff_loss']:.6f} "
               f"sparsity_loss={training_metrics['sparsity_loss']:.6f} sparsity@{threshold_eval}={training_metrics['hard_sparsity']:.6f}")
             
-            logger.run.log_info(f"evaluate subnetwork {subtask}")
-            logger.run.log_info(f"{all_task_scores}")
+            # logger.run.log_info(f"evaluate subnetwork {subtask}")
+            # logger.run.log_info(f"{all_task_scores}")
 
             break
 
@@ -515,7 +668,7 @@ subnetwork_state = nnx.state(q_pruned)
 
 
 # Save subnetwork
-checkpointer = ocp.StandardCheckpointer()
+# checkpointer = ocp.StandardCheckpointer()
 
 step = int(file_name.split("_")[-3])
 ckpt_save_path = os.path.expanduser(
@@ -528,35 +681,44 @@ checkpointer.save(
 )
 print(f"Saved {subtask} subnetwork checkpoint.")
 
-# Evaluate the subnetwork policy
-subnet_policy = get_policy_from_q_net(q_pruned)
-# _ = evaluate_policy_on_task(subnet_policy, task=subtask, seed=seed+1)
-subnet_eval_scores = evaluate_policy_on_task(subnet_policy, seed=seed+1)
-logger.run.log_info(f"evaluate pruned subnetwork {subtask}")
-logger.run.log_info(f"{subnet_eval_scores}")
 
-# For comparison
-print("evaluate original q network")
-_ = evaluate_policy_on_task(policy, seed=seed+2)
+print(f"n_features: {env.observation_space.shape[0]}")
+# # Evaluate the subnetwork policy
+subnet_policy = get_policy_from_q_net(q_pruned)
+# # _ = evaluate_policy_on_task(subnet_policy, task=subtask, seed=seed+1)
+# subnet_eval_scores = evaluate_policy_on_task(subnet_policy, seed=seed+1)
+# logger.run.log_info(f"evaluate pruned subnetwork {subtask}")
+# logger.run.log_info(f"{subnet_eval_scores}")
+
+# # For comparison
+# print("evaluate original q network")
+# _ = evaluate_policy_on_task(policy, seed=seed+2)
 
 # ---------------------------
 # Run interactive demo
 # ---------------------------
 import random
+import time
 
 task = random.choice(OBJ_COLORS)
 sum_reward = 0.0
-eval_env = make_ocean_env(task, randomize=randomize_env, render_mode="human")
-obs, _ = eval_env.reset()
+# eval_env = make_ocean_env(task, randomize=randomize_env, render_mode="human")
+# obs, _ = eval_env.reset()
 while True:
+    key, subkey = jr.split(key)
+    obs = sample_state(env, subtask, hparams_algorithm.get("batch_size"), key=subkey)
+    print(f"obs: {obs}")
     action = subnet_policy(obs)
-    obs, reward, terminated, truncated, info = eval_env.step(action)
-    sum_reward += reward
-    if terminated or truncated:
-        print(f"{task} reward: {reward}")
-        print(f"{task} return: {sum_reward}")
-        eval_env.close()
-        task = random.choice(OBJ_COLORS)
-        sum_reward = 0.0
-        eval_env = make_ocean_env(task, randomize=randomize_env, render_mode="human")
-        obs, _ = eval_env.reset()
+    print(f"action: {action}")
+    time.sleep(1)
+
+    # obs, reward, terminated, truncated, info = eval_env.step(action)
+    # sum_reward += reward
+    # if terminated or truncated:
+    #     print(f"{task} reward: {reward}")
+    #     print(f"{task} return: {sum_reward}")
+    #     eval_env.close()
+    #     task = random.choice(OBJ_COLORS)
+    #     sum_reward = 0.0
+    #     eval_env = make_ocean_env(task, randomize=randomize_env, render_mode="human")
+    #     obs, _ = eval_env.reset()
