@@ -149,7 +149,7 @@ class HoloOceanEnv(gym.Env):
 
         if self.context_in_obs:
             max_array = np.concatenate([np.ones(6), max_array])
-            min_array = np.concatenate([np.zeros(6), min_array])
+            min_array = np.concatenate([np.array([-1, -1, 0, 0, 0, 0]), min_array])
 
         self.observation_space = gym.spaces.Box(min_array, max_array)
 
