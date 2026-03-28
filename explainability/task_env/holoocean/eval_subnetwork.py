@@ -67,7 +67,7 @@ def eval_policy(task, env, policy, current=None, verbose=False, repetition=1, se
                 sum_reward += reward
                 
             task_context = TASK_TO_IDX[task]
-            sum_success_rate += obs[task_context-4]
+            sum_success_rate += 1.0 - obs[task_context-4]
             # print(f"obs: {obs}")
 
     task_score_info.update({
