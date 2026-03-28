@@ -23,7 +23,7 @@ seed_num = 0
 file_name = "_minigrid_holoocean_medium_DDQN-UTS_1774215135.9690797_q_step_000250000_epoch_250000"
 model_hidden_nodes = [128, 128]
 
-eval_num_episode = 100 if randomize_env else 1
+eval_num_episode = 20 if randomize_env else 1
 
 # Define evaluation function
 def eval_policy(task, env, policy, current=None, verbose=False, num_episode=1, seed=None):
@@ -32,10 +32,17 @@ def eval_policy(task, env, policy, current=None, verbose=False, num_episode=1, s
     num_task_success = 0.0
 
     rng = np.random.default_rng(seed=seed)
-    for _ in tqdm(range(num_episode)):
-        context = sample_context(task, current, seed=rng.integers(10000))
+    env_seeds = rng.integers(10000, size=num_episode).tolist()
+    
+    # randomize both current and organisms position with seeds
+    # same set of current and organisms are used for evaluate all networks, when seed is the same
+    for eps in tqdm(range(num_episode)):
+        context = sample_context(task, current, seed=env_seeds[eps])
+        # print(f"context: {context}")
 
-        obs, _ = env.reset(context)
+        obs, _ = env.reset(context, seed=env_seeds[eps])
+        # print(f"obs: {obs}")
+        # print(f"{env.red_organisms[7]}, {env.black_organisms[9]}")
         terminated = truncated = False
 
         while not (terminated or truncated):
