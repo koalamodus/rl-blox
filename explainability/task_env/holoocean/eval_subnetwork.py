@@ -1,74 +1,86 @@
 import os
-# from find_many_objects_env import make_ocean_env
-# from minigrid.core.constants import COLOR_NAMES
+from holoocean_envs import sample_context
+from holoocean_envs import make_holoocean_env
+from holoocean_envs import TASK_NAMES
 import flax.nnx as nnx
-import jax.numpy as jnp
-import jax.random as jr
+import numpy as np
 
 seed = 49  # random seed for np and jax
-key = jr.PRNGKey(seed)
-# OBJ_COLORS = COLOR_NAMES
-# subtasks = ["red", "blue", "purple", "grey"]
+OBJ_COLORS = TASK_NAMES
+subtasks = TASK_NAMES
 
 # ---------------------------
 # Load trained or pruned network
 # ---------------------------
 import orbax.checkpoint as ocp
+from tqdm import tqdm
 from rl_blox.blox.function_approximator.mlp import MLP
 
 # Choose ckpt from pre-trained full q-net
-
-# experiment = "reefshield_random_medium"
-# randomize_env = True
-# seed_num = 0
-# file_name = "_minigrid_reefshield_random_medium_DDQN-UTS_1773787402.9864454_q_step_005000000_epoch_5000000"
-# model_hidden_nodes = [32, 32]
-
-# experiment = "reefshield_fixed_medium"
-# randomize_env = False
-# seed_num = 0
-# file_name = "_minigrid_reefshield_fixed_medium_DDQN-UTS_1773675569.892775_q_step_001000000_epoch_1000000"
-# model_hidden_nodes = [32, 32]
-
-# experiment = "XRL_MINIGRID_POLICY"
-# randomize_env = False
-# seed_num = 48
-# file_name = "minigrid_reefshield_medium_DDQN-UTS_1773420833.4308155_q_step_001000000_epoch_1000000"
-# model_hidden_nodes = [128, 128]
-
+experiment = "holoocean"
+randomize_env = True
+seed_num = 0
+file_name = "_minigrid_holoocean_medium_DDQN-UTS_1774215135.9690797_q_step_000250000_epoch_250000"
+model_hidden_nodes = [128, 128]
 
 eval_num_episode = 100 if randomize_env else 1
 
 # Define evaluation function
-from eval_helper import eval_policy
-def evaluate_policy_on_task(policy, task=None, obj_colors=OBJ_COLORS, randomize=randomize_env, num_episode=eval_num_episode, render_mode=None, seed=42, verbose=True):
-    if task == None:
-        task = obj_colors
+def eval_policy(task, env, policy, current=None, verbose=False, num_episode=1, seed=None):
+    task_score_info = {}
+    sum_reward = 0.0
+    num_task_success = 0.0
+
+    rng = np.random.default_rng(seed=seed)
+    for _ in tqdm(range(num_episode)):
+        context = sample_context(task, current, seed=rng.integers(10000))
+
+        obs, _ = env.reset(context)
+        terminated = truncated = False
+
+        while not (terminated or truncated):
+            action = policy(obs)
+            obs, reward, terminated, truncated, _ = env.step(action)
+            sum_reward += reward
+            if reward > 0.0:
+                num_task_success += 1
+
+    task_score_info.update({
+        f"Task {task}": {
+            "Avg Return": sum_reward / num_episode,
+            "Success Rate": num_task_success / num_episode
+        }
+    })
+    if verbose:
+        print(task_score_info)
+    return task_score_info
+
+def evaluate_policy_on_task(env, policy, tasks=None, obj_colors=OBJ_COLORS, current=None, num_episode=eval_num_episode, render_mode=None, seed=None, verbose=True):
+    if tasks == None:
+        tasks = obj_colors
     else:
-        task = task if isinstance(task, list) else [task]
+        tasks = tasks if isinstance(tasks, list) else [tasks]
     
     all_task_scores = {}  # store results for all colors
+    eval_env = env
 
-    for target_color in task:
-        assert target_color in COLOR_NAMES
-
-        eval_env = make_ocean_env(target_color, randomize, render_mode)
-        task_score_info = eval_policy(target_color, eval_env, policy, verbose=verbose, num_episode=num_episode, seed=seed)
-        eval_env.close()
-
+    for task in tasks:
+        assert task in TASK_NAMES
+        
+        task_score_info = eval_policy(task, eval_env, policy, current, verbose, num_episode, seed)
         all_task_scores.update(task_score_info)
     return all_task_scores
 
 def get_policy_from_q_net(q):
 
     def policy(obs):
-        return int(jnp.argmax(q([obs])))
+        return int(np.argmax(q([obs])))
 
     return policy
 
 # Set up environment to get input/output shapes
-subtask = "purple"
-env = make_ocean_env(subtask)
+subtask = subtasks[0]
+env = make_holoocean_env(render_mode=None, contextual=True)
 
 step = int(file_name.split("_")[-3])
 ckpt_subnet = os.path.expanduser(
@@ -98,7 +110,7 @@ q_full = nnx.merge(graphdef, restored_model_full)
 policy_full = get_policy_from_q_net(q_full)
 
 print("Evaluate full network")
-full_scores = evaluate_policy_on_task(policy_full, task=subtasks, num_episode=eval_num_episode, seed=seed)
+full_scores = evaluate_policy_on_task(env, policy_full, tasks=subtasks, num_episode=eval_num_episode, render_mode=None,seed=seed)
 
 print("Full network evaluation complete.")
 
@@ -119,7 +131,7 @@ for subtask in subtasks:
     policy_sub = get_policy_from_q_net(q_sub)
 
     print(f"Evaluate subnetwork {subtask}")
-    scores = evaluate_policy_on_task(policy_sub, task=subtasks, num_episode=eval_num_episode, seed=seed)
+    scores = evaluate_policy_on_task(env, policy_sub, tasks=subtasks, num_episode=eval_num_episode, seed=seed)
     subnet_scores[subtask] = scores
 
     # Compute performance drop relative to full network
@@ -137,6 +149,7 @@ print("Performance drop compared to full network:")
 for subtask, drops in performance_drop.items():
     print(f"subnetwork {subtask}: {drops}")
 
+env.close()
 # ---------------------------
 # Save evaluation result
 # ---------------------------
