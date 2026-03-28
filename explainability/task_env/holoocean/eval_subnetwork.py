@@ -23,20 +23,22 @@ seed_num = 0
 file_name = "_minigrid_holoocean_medium_DDQN-UTS_1774215135.9690797_q_step_000250000_epoch_250000"
 model_hidden_nodes = [128, 128]
 
-eval_num_episode = 20 if randomize_env else 1
+eval_repetition = 20 if randomize_env else 1
 
 # Define evaluation function
-def eval_policy(task, env, policy, current=None, verbose=False, num_episode=1, seed=None):
+def eval_policy(task, env, policy, current=None, verbose=False, repetition=1, seed=None):
     task_score_info = {}
     sum_reward = 0.0
     sum_success_rate = 0.0
 
     rng = np.random.default_rng(seed=seed)
-    env_seeds = rng.integers(10000, size=num_episode).tolist()
+    env_seeds = rng.integers(10000, size=repetition).tolist()
+
+    num_episode = repetition
     
     # randomize both current and organisms position with seeds
     # same set of current and organisms are used for evaluate all networks, when seed is the same
-    for eps in tqdm(range(num_episode)):
+    for eps in tqdm(range(repetition)):
         context = sample_context(task, current, seed=env_seeds[eps])
         # print(f"context: {context}")
 
@@ -64,7 +66,7 @@ def eval_policy(task, env, policy, current=None, verbose=False, num_episode=1, s
         print(task_score_info)
     return task_score_info
 
-def evaluate_policy_on_task(env, policy, tasks=None, obj_colors=OBJ_COLORS, current=None, num_episode=eval_num_episode, render_mode=None, seed=None, verbose=True):
+def evaluate_policy_on_task(env, policy, tasks=None, obj_colors=OBJ_COLORS, current=None, repetition=eval_repetition, render_mode=None, seed=None, verbose=True):
     if tasks == None:
         tasks = obj_colors
     else:
@@ -76,7 +78,7 @@ def evaluate_policy_on_task(env, policy, tasks=None, obj_colors=OBJ_COLORS, curr
     for task in tasks:
         assert task in TASK_NAMES
         
-        task_score_info = eval_policy(task, eval_env, policy, current, verbose, num_episode, seed)
+        task_score_info = eval_policy(task, eval_env, policy, current, verbose, repetition, seed)
         all_task_scores.update(task_score_info)
     return all_task_scores
 
@@ -119,7 +121,7 @@ q_full = nnx.merge(graphdef, restored_model_full)
 policy_full = get_policy_from_q_net(q_full)
 
 print("Evaluate full network")
-full_scores = evaluate_policy_on_task(env, policy_full, tasks=subtasks, num_episode=eval_num_episode, render_mode=None,seed=seed)
+full_scores = evaluate_policy_on_task(env, policy_full, tasks=subtasks, repetition=eval_repetition, render_mode=None,seed=seed)
 
 print("Full network evaluation complete.")
 
@@ -140,7 +142,7 @@ for subtask in subtasks:
     policy_sub = get_policy_from_q_net(q_sub)
 
     print(f"Evaluate subnetwork {subtask}")
-    scores = evaluate_policy_on_task(env, policy_sub, tasks=subtasks, num_episode=eval_num_episode, seed=seed)
+    scores = evaluate_policy_on_task(env, policy_sub, tasks=subtasks, repetition=eval_repetition, seed=seed)
     subnet_scores[subtask] = scores
 
     # Compute performance drop relative to full network
