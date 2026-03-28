@@ -127,34 +127,16 @@ max_array = jnp.array(
             ], dtype=np.float32
         )
 
-# context_in_obs=True
+# context [current_context x 2, task_context x 4]
 max_array = np.concatenate([np.ones(6, dtype=np.float32), max_array])
 min_array = np.concatenate([np.array([-1, -1, 0, 0, 0, 0], dtype=np.float32), min_array])
 
-# env = {}
-# env.observation_space.high = max_array
-# env.observation_space.low = min_array
-# env.action_space.n = 5
-# env.observation_space.shape[0] = len(max_array)
-
-# env = {}
-# env["max_array"] = max_array
-# env["min_array"] = min_array
-# env["action_space"] = {"n": 5}
-# env["observation_space"] = {"shape": [len(max_array)]}
-
-
-
 env = SimpleNamespace()
-
-# min_array = np.array([0, 0, 0], dtype=np.float32)
-# max_array = np.array([1, 1, 1], dtype=np.float32)
-
 env.observation_space = Box(low=min_array, high=max_array, dtype=np.float32)
 env.action_space = Discrete(5)
 
-# print(f"max_array: {env.observation_space.high}")
-# print(f"min_array: {env.observation_space.low}")
+print(f"max_array: {env.observation_space.high}")
+print(f"min_array: {env.observation_space.low}")
 print(f"n_features: {env.observation_space.shape[0]}")
 print(f"n_outputs: {int(env.action_space.n)}")
 # ---------------------------
@@ -164,25 +146,6 @@ import orbax.checkpoint as ocp
 from rl_blox.blox.function_approximator.mlp import MLP
 
 # Choose ckpt
-
-# experiment = "reefshield_random_medium"
-# randomize_env = True
-# seed_num = 0
-# file_name = "_minigrid_reefshield_random_medium_DDQN-UTS_1773787402.9864454_q_step_005000000_epoch_5000000"
-# model_hidden_nodes = [32, 32]
-
-# experiment = "reefshield_fixed_medium"
-# randomize_env = False
-# seed_num = 0
-# file_name = "_minigrid_reefshield_fixed_medium_DDQN-UTS_1773675569.892775_q_step_001000000_epoch_1000000"
-# model_hidden_nodes = [32, 32]
-
-# experiment = "XRL_MINIGRID_POLICY"
-# randomize_env = False
-# seed_num = 48
-# file_name = "minigrid_reefshield_medium_DDQN-UTS_1773420833.4308155_q_step_001000000_epoch_1000000"
-# model_hidden_nodes = [128, 128]
-
 experiment = "holoocean"
 randomize_env = True
 seed_num = 0
@@ -196,7 +159,6 @@ ckpt_path = os.path.expanduser(
 
 # Set up environment to get input/output shapes
 OBJ_COLORS = COLOR_NAMES
-# subtask = None
 subtask = subtasks[0]
 env_name = f"ocean_{subtask}_{experiment}"
 # env = make_ocean_env(subtask)
@@ -224,10 +186,8 @@ print("Loaded model checkpoint.")
 def get_policy_from_q_net(q):
 
     def policy(obs):
-        # print(f"q_values: {q([obs])}")
-        # print(f"argmax: {jnp.argmax(q([obs]))}")
-        # print(f"action: {int(jnp.argmax(q([obs])))}")
-        return int(jnp.argmax(q([obs])))
+        print(f"q_values: {q([obs])}")
+        return int(jnp.argmax(q(obs)))
 
     return policy
 
@@ -539,7 +499,6 @@ def sample_state(env, subtask=None, batch_size=128, key=jr.PRNGKey(seed)):
         idx = jax.random.randint(subkey, shape=(), minval=0, maxval=len(obj_color_indices))
 
         context = obj_color_indices[idx]
-        # jax.debug.print("context={c}", c=context)
 
     elif subtask in obj_colors:
         # Sample only the subtask
@@ -548,20 +507,14 @@ def sample_state(env, subtask=None, batch_size=128, key=jr.PRNGKey(seed)):
     else:
         raise RuntimeError(f"Unknown subtask: {subtask}")
 
-    # Dezimal context 
-    # # broadcast to batch
-    # context_batch = jnp.full((batch_size,), context)
-    # # Replace the last elements of every row in `state`
-    # state = state.at[:, -1].set(context_batch)
-
     # One-hot context
     num_current_context = 2
     one_hot_length = len(obj_colors)
     one_hot_context = jnp.zeros(one_hot_length)
-    one_hot_context = one_hot_context.at[context].set(1.0)  # JAX-friendly
+    one_hot_context = one_hot_context.at[context].set(1.0)
 
-    # Broadcast the one-hot context to the batch
-    # Replace the last 6 elements of every row in `state`
+    # Broadcast the one-hot task context to the batch
+    # Replace the first 3-6 elements of every row in `state`
     state = state.at[:, num_current_context:(num_current_context+one_hot_length)].set(one_hot_context)
     # print(f"state: {state}")
 
@@ -668,13 +621,9 @@ pruned_state = get_pruned_state(masked_net, threshold_eval)
 # Update the new MLP with pruned parameters
 nnx.update(q_pruned, pruned_state)
 
-# save pruned network
+# Save pruned network
 subnetwork_state = nnx.state(q_pruned)
 # print(f"subnetwork_state is {subnetwork_state}")
-
-
-# Save subnetwork
-# checkpointer = ocp.StandardCheckpointer()
 
 step = int(file_name.split("_")[-3])
 ckpt_save_path = os.path.expanduser(

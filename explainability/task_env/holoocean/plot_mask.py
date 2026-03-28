@@ -30,25 +30,6 @@ import orbax.checkpoint as ocp
 from rl_blox.blox.function_approximator.mlp import MLP
 
 # Choose ckpt from pre-trained full q-net
-
-# experiment = "reefshield_random_medium"
-# randomize_env = True
-# seed_num = 0
-# file_name = "_minigrid_reefshield_random_medium_DDQN-UTS_1773787402.9864454_q_step_005000000_epoch_5000000"
-# model_hidden_nodes = [32, 32]
-
-# experiment = "reefshield_fixed_medium"
-# randomize_env = False
-# seed_num = 0
-# file_name = "_minigrid_reefshield_fixed_medium_DDQN-UTS_1773675569.892775_q_step_001000000_epoch_1000000"
-# model_hidden_nodes = [32, 32]
-
-# experiment = "XRL_MINIGRID_POLICY"
-# randomize_env = False
-# seed_num = 48
-# file_name = "minigrid_reefshield_medium_DDQN-UTS_1773420833.4308155_q_step_001000000_epoch_1000000"
-# model_hidden_nodes = [128, 128]
-
 experiment = "holoocean"
 randomize_env = True
 seed_num = 0
