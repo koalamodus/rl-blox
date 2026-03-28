@@ -33,28 +33,42 @@ def eval_policy(task, env, policy, current=None, verbose=False, repetition=1, se
 
     rng = np.random.default_rng(seed=seed)
     env_seeds = rng.integers(10000, size=repetition).tolist()
-
-    num_episode = repetition
     
-    # randomize both current and organisms position with seeds
-    # same set of current and organisms are used for evaluate all networks, when seed is the same
+    current_contexts = [
+        # train_contexts
+        [0, 0],
+        [1, 0],
+        [0, 1],
+        [-1, 0],
+        [0, -1],
+        # # test_contexts
+        # [1, 1],
+        # [-1, -1],
+        # [-1, 1],
+        # [1, -1],
+    ]
+
+    num_episode = len(current_contexts) * repetition
+    # print(f"num_episode: {num_episode}")
+
     for eps in tqdm(range(repetition)):
-        context = sample_context(task, current, seed=env_seeds[eps])
-        # print(f"context: {context}")
+        for current in current_contexts:
+            context = sample_context(task, current)
+            # print(f"env_seeds[eps]: {env_seeds[eps]}, context: {context}")
 
-        obs, _ = env.reset(context, seed=env_seeds[eps])
-        # print(f"obs: {obs}")
-        # print(f"{env.red_organisms[7]}, {env.black_organisms[9]}")
-        terminated = truncated = False
+            obs, _ = env.reset(context, seed=env_seeds[eps])
+            # print(f"obs: {obs}")
+            # print(f"{env.red_organisms[7]}, {env.black_organisms[9]}")
+            terminated = truncated = False
 
-        while not (terminated or truncated):
-            action = policy(obs)
-            obs, reward, terminated, truncated, _ = env.step(action)
-            sum_reward += reward
-        
-        task_context = TASK_TO_IDX[task]
-        sum_success_rate += obs[task_context-4]
-        print(f"obs: {obs}")
+            while not (terminated or truncated):
+                action = policy(obs)
+                obs, reward, terminated, truncated, _ = env.step(action)
+                sum_reward += reward
+                
+            task_context = TASK_TO_IDX[task]
+            sum_success_rate += obs[task_context-4]
+            # print(f"obs: {obs}")
 
     task_score_info.update({
         f"Task {task}": {
