@@ -4,6 +4,45 @@ import gymnasium as gym
 import holoocean
 import numpy as np
 
+# action_name = action_map[action_number]
+action_map = {
+    0: "forward",
+    1: "stop",
+    2: "backward",
+    3: "turn left",
+    4: "turn right"
+}
+
+NUM_CURRENT_CONTEXT = 2
+
+TASK_TO_IDX = {"red": 0, "blue": 1, "green": 2, "black": 3}
+TASK_NAMES = ["red", "blue", "green", "black"]
+
+
+def task_to_context(task: str):
+    if task not in TASK_TO_IDX:
+        raise ValueError(f"Unknown task '{task}'")
+    
+    task_context = TASK_TO_IDX[task]
+    
+    one_hot_length = len(TASK_NAMES)
+    one_hot_context = np.zeros(one_hot_length, dtype=float)
+    one_hot_context[task_context] = 1.0
+    
+    return one_hot_context
+
+# randomly sample current if not specified
+def sample_context(task:str="red", current=None, seed=None):
+    task_context = task_to_context(task)
+    if current is not None:
+        current_context = current      
+    else:
+        rng = np.random.default_rng(seed=seed)
+        current_context = rng.choice([-1, 0, 1], size=2)
+    context = np.concatenate([current_context, task_context])
+    return context
+
+
 scenario = {
     "name": "test",
     "package_name": "Ocean",
@@ -216,9 +255,11 @@ class HoloOceanEnv(gym.Env):
             observation = np.concatenate([self.context, observation])
         return observation
 
-    def reset(self, seed: Optional[int] = None, options: Optional[dict] = None):
+    def reset(self, context=None, seed: Optional[int] = None, options: Optional[dict] = None):
         super().reset(seed=seed)
         self.total_steps = 0
+        if context is not None:
+            self.context = context
         self.currents = np.array([self.context[0], self.context[1], 0])
         state = self.sim.reset()
 
@@ -488,3 +529,15 @@ class HoloOceanEnv(gym.Env):
                 )
 
         return self._get_obs(state), reward, terminated, truncated, {}
+
+def make_holoocean_env(context=None, render_mode=None, contextual=True):
+    if context is not None:
+        context=context
+    else:
+        context=np.array([0, 0, 1, 0, 0, 0])
+    env = HoloOceanEnv(
+        render_mode=render_mode,
+        context=context,
+        context_in_obs=contextual,
+    )
+    return env
