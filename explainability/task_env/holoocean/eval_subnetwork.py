@@ -1,7 +1,7 @@
 import os
 from holoocean_envs import sample_context
 from holoocean_envs import make_holoocean_env
-from holoocean_envs import TASK_NAMES
+from holoocean_envs import TASK_NAMES, TASK_TO_IDX
 import flax.nnx as nnx
 import numpy as np
 
@@ -29,7 +29,7 @@ eval_num_episode = 20 if randomize_env else 1
 def eval_policy(task, env, policy, current=None, verbose=False, num_episode=1, seed=None):
     task_score_info = {}
     sum_reward = 0.0
-    num_task_success = 0.0
+    sum_success_rate = 0.0
 
     rng = np.random.default_rng(seed=seed)
     env_seeds = rng.integers(10000, size=num_episode).tolist()
@@ -49,13 +49,15 @@ def eval_policy(task, env, policy, current=None, verbose=False, num_episode=1, s
             action = policy(obs)
             obs, reward, terminated, truncated, _ = env.step(action)
             sum_reward += reward
-            if reward > 0.0:
-                num_task_success += 1
+        
+        task_context = TASK_TO_IDX[task]
+        sum_success_rate += obs[task_context-4]
+        print(f"obs: {obs}")
 
     task_score_info.update({
         f"Task {task}": {
             "Avg Return": sum_reward / num_episode,
-            "Success Rate": num_task_success / num_episode
+            "Success Rate": sum_success_rate / num_episode
         }
     })
     if verbose:
