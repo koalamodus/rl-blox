@@ -10,7 +10,7 @@ total_num_objects = 1
 # ---------------------------
 import pickle
 
-with open("test_holoocean_evaluation_results.pkl", "rb") as f:
+with open("holoocean_evaluation_results.pkl", "rb") as f:
     eval_results = pickle.load(f)
 
 full_scores = eval_results["full_scores"]
@@ -29,7 +29,7 @@ subnet_colors = {
     "red": "#FF6666",      # moderately light red
     "blue": "#66B2FF",     # moderately light blue
     "green": "#66CC99",    # moderately light green
-    "black": "#999999"      # moderately light grey
+    "black": "#999999"     # moderately light grey
 }
 full_color="#444444"
 full_network_label="full network"
@@ -142,7 +142,7 @@ def plot_full_subnet_with_drop(
     }
 
     y_label_rel = {
-        "Avg Return": "relative average return",
+        "Avg Return": "relative performance",
         "Success Rate": "relative performance",
     }
 
@@ -186,7 +186,8 @@ def plot_full_subnet_with_drop(
     ax.set_ylabel(y_label_abs[metric], fontsize=font_size, labelpad=label_pad)
     ax.yaxis.set_label_coords(y_label_coords[0], y_label_coords[1])
     # ax.set_title("Absolute Performance", fontsize=font_size)
-    ax.set_ylim(0., 1.0)
+    if metrics == ["Success Rate"]:
+        ax.set_ylim(0., 1.0)
     ax.grid(axis="y")
     ax.legend(fontsize=font_size)
     ax.tick_params(axis='x', labelsize=font_size)  # x-axis numbers
@@ -210,7 +211,7 @@ def plot_full_subnet_with_drop(
 
     ax.set_ylabel(y_label_rel[metric], fontsize=font_size, labelpad=label_pad)
     # ax.set_title("Relative Performance", fontsize=font_size)
-    ax.set_ylim(0., 1.5)
+    ax.set_ylim(0., 1.0)
     ax.grid(axis="y")
     ax.yaxis.set_label_coords(y_label_coords[0], y_label_coords[1])
     ax.tick_params(axis='x', labelsize=font_size)  # x-axis numbers
@@ -234,4 +235,5 @@ plot_full_subnet_with_drop(
     full_color=full_color,
     # title="Success rate of full network and subnetworks",
     metrics=["Success Rate"],
+    # metrics=["Avg Return"],
 )
