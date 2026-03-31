@@ -2,8 +2,6 @@ from holoocean_envs import TASK_NAMES
 
 # ["red", "blue", "green", "black"]
 subtasks = TASK_NAMES
-# TODO: remove this variable, success rate is fixed now.
-total_num_objects = 1
 
 # ---------------------------
 # Load evaluation result
@@ -84,7 +82,7 @@ def plot_full_subnet_with_drop(
     ax = axes[0]
 
     # Full network (leftmost position)
-    full_values = [full_scores[task][metric] / total_num_objects for task in tasks]
+    full_values = [full_scores[task][metric] for task in tasks]
 
     ax.bar(
         x,
@@ -96,7 +94,7 @@ def plot_full_subnet_with_drop(
 
     # Subnetworks
     for i, subtask in enumerate(subtasks):
-        values = [subnet_scores[subtask][task][metric]  / total_num_objects for task in tasks]
+        values = [subnet_scores[subtask][task][metric] for task in tasks]
         ax.bar(
             x + (i + 1) * bar_width,
             values,
@@ -108,7 +106,7 @@ def plot_full_subnet_with_drop(
     ax.set_ylabel(y_label_abs[metric], fontsize=font_size, labelpad=label_pad)
     ax.yaxis.set_label_coords(y_label_coords[0], y_label_coords[1])
     # ax.set_title("Absolute Performance", fontsize=font_size)
-    if metric == ["Success Rate"]:
+    if metric == "Success Rate":
         ax.set_ylim(0., 1.0)
     ax.grid(axis="y")
     ax.legend(fontsize=font_size)
