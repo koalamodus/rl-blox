@@ -23,7 +23,16 @@ seed_num = 0
 file_name = "_minigrid_holoocean_medium_DDQN-UTS_1774215135.9690797_q_step_000250000_epoch_250000"
 model_hidden_nodes = [128, 128]
 
-eval_repetition = 20 if randomize_env else 1
+# seed_num = 4
+# file_name = "_minigrid_holoocean_medium_DDQN-UTS_1774342732.5868404_q_step_000020000_epoch_20000"
+
+# seed_num = 5
+# file_name = "_minigrid_holoocean_medium_DDQN-UTS_1774342790.227965_q_step_000020000_epoch_20000"
+
+# seed_num = 45
+# file_name = "_minigrid_holoocean_medium_DDQN-UTS_1774296412.8134036_q_step_000250000_epoch_250000"
+
+eval_repetition = 4 if randomize_env else 1
 
 # Define evaluation function
 def eval_policy(task, env, policy, current=None, verbose=False, repetition=1, seed=None):
@@ -54,7 +63,7 @@ def eval_policy(task, env, policy, current=None, verbose=False, repetition=1, se
     for eps in tqdm(range(repetition)):
         for current in current_contexts:
             context = sample_context(task, current)
-            # print(f"env_seeds[eps]: {env_seeds[eps]}, context: {context}")
+            # print(f"env_seeds[eps]: {env_seeds[eps]}, context: {context}, task: {task}")
 
             obs, _ = env.reset(context, seed=env_seeds[eps])
             # print(f"obs: {obs}")
@@ -64,11 +73,12 @@ def eval_policy(task, env, policy, current=None, verbose=False, repetition=1, se
             while not (terminated or truncated):
                 action = policy(obs)
                 obs, reward, terminated, truncated, _ = env.step(action)
+                # print(f"action: {action}, reward: {reward}")
                 sum_reward += reward
                 
             task_context = TASK_TO_IDX[task]
             sum_success_rate += 1.0 - obs[task_context-4]
-            # print(f"obs: {obs}")
+            # print(f"sum_reward: {sum_reward}, sum_success_rate: {sum_success_rate}")
 
     task_score_info.update({
         f"Task {task}": {
@@ -80,7 +90,7 @@ def eval_policy(task, env, policy, current=None, verbose=False, repetition=1, se
         print(task_score_info)
     return task_score_info
 
-def evaluate_policy_on_task(env, policy, tasks=None, obj_colors=OBJ_COLORS, current=None, repetition=eval_repetition, render_mode=None, seed=None, verbose=True):
+def evaluate_policy_on_task(env, policy, tasks=None, obj_colors=OBJ_COLORS, current=None, repetition=eval_repetition, seed=None, verbose=True):
     if tasks == None:
         tasks = obj_colors
     else:
@@ -135,7 +145,7 @@ q_full = nnx.merge(graphdef, restored_model_full)
 policy_full = get_policy_from_q_net(q_full)
 
 print("Evaluate full network")
-full_scores = evaluate_policy_on_task(env, policy_full, tasks=subtasks, repetition=eval_repetition, render_mode=None,seed=seed)
+full_scores = evaluate_policy_on_task(env, policy_full, tasks=subtasks, repetition=eval_repetition, seed=seed)
 
 print("Full network evaluation complete.")
 
