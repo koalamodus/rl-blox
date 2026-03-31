@@ -117,6 +117,20 @@ for i in range(num_layers):
     titles.append(layer_name)
 
 # ---------------------------
+# Plot params
+# ---------------------------
+save_fig = False
+
+font_size = 36
+w_space = 0.8
+label_pad = 3
+title_pad = 20
+scale = 0.2
+margin_width_ratio = 10
+annotation_line_width = 1.5
+legend_pos = [0.7, 0.7]
+
+# ---------------------------
 # Plot
 # ---------------------------
 
@@ -126,20 +140,19 @@ import matplotlib.patches as mpatches
 cmap = ListedColormap(["white", "green", "#C2E1BCB7"])
 
 width_ratios = [W.shape[1] for W in layers_vis]
-scale = 0.1
-fig_width = sum(width_ratios) * scale
+fig_width = (sum(width_ratios) + margin_width_ratio) * scale
 fig_height = max(W.shape[0] for W in layers_vis) * scale
 
 fig = plt.figure(figsize=(fig_width, fig_height))
-gs = fig.add_gridspec(1, len(layers_vis), width_ratios=width_ratios, wspace=0.3)
+gs = fig.add_gridspec(1, len(layers_vis), width_ratios=width_ratios, wspace=w_space)
 
 for i, W in enumerate(layers_vis):
     ax = fig.add_subplot(gs[0, i])
     ax.imshow(W, cmap=cmap, aspect='equal', vmin=0, vmax=2)
 
     if i == 0:
-        ax.set_xlabel("Output Neuron Index", fontsize=10)
-        ax.set_ylabel("Input Neuron Index", fontsize=10)
+        ax.set_xlabel("Output Neuron Index", fontsize=font_size, labelpad=label_pad)
+        ax.set_ylabel("Input Neuron Index", fontsize=font_size, labelpad=label_pad)
 
     h, w = W.shape
     ax.set_xlim(-0.5, w-0.5)
@@ -149,12 +162,12 @@ for i, W in enumerate(layers_vis):
         ax.set_xticks([0, w-1])
         ax.set_xticklabels([0, w-1])
 
-    ax.set_title(titles[i], fontsize=10)
-    ax.tick_params(axis='both', labelsize=8)
+    ax.set_title(titles[i], fontsize=font_size, pad=title_pad)
+    ax.tick_params(axis='both', labelsize=font_size)
 
     # --- Add annotation for Hidden Layer 0 ---
     if i == 0:
-        x_axes = 1.02
+        x_axes = 1.05
         y_axes = (6/2) / h
 
         ax.annotate(
@@ -164,11 +177,11 @@ for i, W in enumerate(layers_vis):
             xytext=(x_axes + 0.15, y_axes),
             textcoords=ax.transAxes,
             arrowprops=dict(
-                arrowstyle="<-[,widthB=1.5,lengthB=0.3",
+                arrowstyle="<-[,widthB=0.7,lengthB=0.3",
                 color="black",
-                linewidth=1.0,
+                linewidth=annotation_line_width,
             ),
-            fontsize=9,
+            fontsize=font_size,
             color='black',
             va='center',
             clip_on=False
@@ -178,8 +191,8 @@ for i, W in enumerate(layers_vis):
 
         # middle of axis (normalized coords)
         x_middle = 0.5
-        y_bracket = -0.12
-        y_text = -0.25
+        y_bracket = -0.2
+        y_text = -0.35
 
         ax.annotate(
             "actions",
@@ -190,11 +203,11 @@ for i, W in enumerate(layers_vis):
             ha="center",
             va="top",
             arrowprops=dict(
-                arrowstyle="<-[,widthB=0.75,lengthB=0.3",
+                arrowstyle="<-[,widthB=0.4,lengthB=0.3",
                 color="black",
-                linewidth=1.0,
+                linewidth=annotation_line_width,
             ),
-            fontsize=9,
+            fontsize=font_size,
             color='black',
             clip_on=False
         )
@@ -207,27 +220,32 @@ legend_patches = [
 ]
 
 fig.legend(handles=legend_patches,
-           loc='lower center', bbox_to_anchor=(0.75, 0.8),
-           ncol=1, fontsize=8)
+           loc='lower center',
+           bbox_to_anchor=(legend_pos[0], legend_pos[1]),
+           ncol=1,
+           fontsize=font_size,
+           handlelength=1.0,                # length of the colored box
+           handleheight=1.0,
+           )
 
-fig.suptitle("Shared weight across subtasks", fontsize=14)
+fig.suptitle("Shared weight across subtasks", fontsize=font_size)
 fig.text(
         0.5,
         0.01,
         f"{plot_info}",
         ha='center',
         va='bottom',
-        fontsize=8
+        fontsize=font_size
     )
-    # fig.text(
-    #     0.5,
-    #     0.2,
-    #     mask_info,
-    #     ha='left',
-    #     va='bottom',
-    #     fontsize=8
-    # )
-plt.tight_layout(rect=[0, 0.05, 1, 0.95])
+
+# plt.subplots_adjust(top=0.9, bottom=0.1, right=0.9, left=0.1)
+# plt.tight_layout()
+
+if save_fig:
+    file_name = "shared_weights.pdf"
+    path = os.path.expanduser(f'~/Pictures/{file_name}')
+    plt.savefig(path)
+
 plt.show()
 
 # ---------------------------
@@ -283,20 +301,19 @@ for s_idx, subtask in enumerate(subtask_list):
     # ---------------------------
 
     width_ratios = [W.shape[1] for W in layers_vis]
-    scale = 0.1
-    fig_width = sum(width_ratios) * scale
+    fig_width = (sum(width_ratios) + margin_width_ratio) * scale
     fig_height = max(W.shape[0] for W in layers_vis) * scale
 
     fig = plt.figure(figsize=(fig_width, fig_height))
-    gs = fig.add_gridspec(1, len(layers_vis), width_ratios=width_ratios, wspace=0.3)
+    gs = fig.add_gridspec(1, len(layers_vis), width_ratios=width_ratios, wspace=w_space)
 
     for i, W in enumerate(layers_vis):
         ax = fig.add_subplot(gs[0, i])
         ax.imshow(W, cmap=cmap, aspect='equal', vmin=0, vmax=3)
 
         if i == 0:
-            ax.set_xlabel("Output Neuron Index", fontsize=10)
-            ax.set_ylabel("Input Neuron Index", fontsize=10)
+            ax.set_xlabel("Output Neuron Index", fontsize=font_size, labelpad=label_pad)
+            ax.set_ylabel("Input Neuron Index", fontsize=font_size, labelpad=label_pad)
 
         h, w = W.shape
         ax.set_xlim(-0.5, w-0.5)
@@ -306,23 +323,30 @@ for s_idx, subtask in enumerate(subtask_list):
             ax.set_xticks([0, w-1])
             ax.set_xticklabels([0, w-1])
 
-        ax.set_title(titles[i], fontsize=10)
-        ax.tick_params(axis='both', labelsize=8)
+        ax.set_title(titles[i], fontsize=font_size, pad=title_pad)
+        ax.tick_params(axis='both', labelsize=font_size)
     
         # --- Add annotation for Hidden Layer 0 ---
         if i == 0:
             context = COLOR_TO_IDX[subtask]
-            # coordinates for the arrow tip (lowest row, rightmost column)
-            arrow_x = w - 1
-            arrow_y = h - 6 + context
 
+            arrow_x = 1.0
+            arrow_y = (6 - context) / h
             ax.annotate(
                 f"context encoding of subtask {subtask}",
-                xy=(arrow_x, arrow_y),                  # point of interest
-                xytext=(arrow_x + 5, arrow_y + 0.5),    # text location (to the right)
-                arrowprops=dict(arrowstyle="<-", facecolor='black'),
-                fontsize=9,
-                color='black'
+                xy=(arrow_x, arrow_y),
+                xycoords=ax.transAxes,
+                xytext=(arrow_x + 0.2, arrow_y),
+                textcoords=ax.transAxes,
+                arrowprops=dict(
+                    arrowstyle="<-",
+                    color='black',
+                    linewidth=annotation_line_width,
+                ),
+                fontsize=font_size,
+                color='black',
+                va='center',
+                clip_on=False                       # allow drawing outside axis
             )
 
     # Legend
@@ -334,27 +358,29 @@ for s_idx, subtask in enumerate(subtask_list):
     ]
 
     fig.legend(handles=legend_patches,
-               loc='lower center', bbox_to_anchor=(0.75, 0.8),
-               ncol=1, fontsize=8)
+               loc='lower center',
+               bbox_to_anchor=(legend_pos[0], legend_pos[1]),
+               ncol=1,
+               fontsize=font_size,
+               handlelength=1.0,                # length of the colored box
+               handleheight=1.0,
+               )
 
-    fig.suptitle(f"Subnetwork {subtask}", fontsize=14)
+    fig.suptitle(f"Subnetwork {subtask}", fontsize=font_size)
     fig.text(
         0.5,
         0.01,
         f"{plot_info}",
         ha='center',
         va='bottom',
-        fontsize=8
+        fontsize=font_size
     )
-    # fig.text(
-    #     0.5,
-    #     0.2,
-    #     mask_info,
-    #     ha='left',
-    #     va='bottom',
-    #     fontsize=8
-    # )
-    plt.tight_layout(rect=[0, 0.05, 1, 0.95])
+
+    if save_fig:
+        file_name = f"subnetwork_{subtask}.pdf"
+        path = os.path.expanduser(f'~/Pictures/{file_name}')
+        plt.savefig(path)
+
     plt.show()
 
 # ---------------------------
@@ -403,13 +429,12 @@ subtask_mask_color = 'red' if plot_mask_only else 'yellow'
 custom_cmap.set_bad(color=shared_mask_color)  # Black for masked (zero in all subtasks)
 
 # Figure size and layout
-width_ratios = [W.shape[1] for W in masked_layers] + [1.5]
-scale = 0.1
-fig_width = sum(width_ratios) * scale
+width_ratios = [W.shape[1] for W in masked_layers]
+fig_width = (sum(width_ratios) + margin_width_ratio) * scale
 fig_height = max(W.shape[0] for W in masked_layers) * scale
 
 fig = plt.figure(figsize=(fig_width, fig_height))
-gs = fig.add_gridspec(1, len(masked_layers)+1, width_ratios=width_ratios, wspace=0.5)
+gs = fig.add_gridspec(1, len(masked_layers)+1, width_ratios=width_ratios, wspace=w_space)
 
 # Shared color scale for weight plots
 if not plot_mask_only:
@@ -424,8 +449,8 @@ for i, W in enumerate(masked_layers):
     im = ax.imshow(W, cmap=custom_cmap, norm=norm, aspect='equal')
 
     if i == 0:
-        ax.set_xlabel("Output Neuron Index", fontsize=10)
-        ax.set_ylabel("Input Neuron Index", fontsize=10)
+        ax.set_xlabel("Output Neuron Index", fontsize=font_size, labelpad=label_pad)
+        ax.set_ylabel("Input Neuron Index", fontsize=font_size, labelpad=label_pad)
 
     h, w = W.shape
     ax.set_xlim(-0.5, w-0.5)
@@ -435,32 +460,32 @@ for i, W in enumerate(masked_layers):
         ax.set_xticks([0, w-1])
         ax.set_xticklabels([0, w-1])
 
-    ax.set_title(titles[i], fontsize=10)
-    ax.tick_params(axis='both', labelsize=8)
+    ax.set_title(titles[i], fontsize=font_size, pad=title_pad)
+    ax.tick_params(axis='both', labelsize=font_size)
     axes.append(ax)
 
 # Colorbar (only for weight-plot mode)
 if not plot_mask_only:
     cax = fig.add_subplot(gs[0, -1])
     cbar = fig.colorbar(im, cax=cax)
-    cbar.set_label("Weight Value", fontsize=10)
-    cbar.ax.tick_params(labelsize=8)
+    cbar.set_label("Weight Value", fontsize=font_size, labelpad=label_pad)
+    cbar.ax.tick_params(labelsize=font_size)
 
 # Figure title and bottom text
-fig.suptitle(f"Masked weights across all subtasks", fontsize=14)
+fig.suptitle(f"Masked weights across all subtasks", fontsize=font_size)
 fig.text(
     0.5,
     0.01,
     f"{plot_info}",
     ha='center',
     va='bottom',
-    fontsize=8
+    fontsize=font_size
 )
 
 # Legend for masked weights
 masked_patch = mpatches.Patch(color=shared_mask_color, label='Mask in all subtasks')
-fig.legend(handles=[masked_patch], loc='lower center', bbox_to_anchor=(0.7, 0.10),
-           ncol=1, fontsize=8)
+fig.legend(handles=[masked_patch], loc='lower center', bbox_to_anchor=(0.7, 0.15),
+           ncol=1, fontsize=font_size)
 
 plt.tight_layout(rect=[0, 0, 1, 0.95])
 plt.show()
@@ -506,12 +531,11 @@ for subtask in subtask_list:
 
 
     # Plot
-    width_ratios = [W.shape[1] for W, _, _ in masked_layers] + [1.5]
-    scale = 0.1
-    fig_width = sum(width_ratios) * scale
+    width_ratios = [W.shape[1] for W, _, _ in masked_layers]
+    fig_width = (sum(width_ratios) + margin_width_ratio) * scale
     fig_height = max(W.shape[0] for W, _, _ in masked_layers) * scale
     fig = plt.figure(figsize=(fig_width, fig_height))
-    gs = fig.add_gridspec(1, len(masked_layers)+1, width_ratios=width_ratios, wspace=0.5)
+    gs = fig.add_gridspec(1, len(masked_layers)+1, width_ratios=width_ratios, wspace=w_space)
 
     if plot_mask_only:
         custom_cmap = LinearSegmentedColormap.from_list("mask_bw", ["white", "black"])
@@ -544,8 +568,8 @@ for subtask in subtask_list:
         ax.imshow(subtask_overlay, cmap=LinearSegmentedColormap.from_list('subtask_mask', [subtask_mask_color, subtask_mask_color]), alpha=1.0)
 
         if i == 0:
-            ax.set_xlabel("Output Neuron Index", fontsize=10)
-            ax.set_ylabel("Input Neuron Index", fontsize=10)
+            ax.set_xlabel("Output Neuron Index", fontsize=font_size, labelpad=label_pad)
+            ax.set_ylabel("Input Neuron Index", fontsize=font_size, labelpad=label_pad)
 
         h, w = W_masked.shape
         ax.set_xlim(-0.5, w-0.5)
@@ -555,16 +579,16 @@ for subtask in subtask_list:
             ax.set_xticks([0, w-1])
             ax.set_xticklabels([0, w-1])
 
-        ax.set_title(titles[i], fontsize=10)
-        ax.tick_params(axis='both', labelsize=8)
+        ax.set_title(titles[i], fontsize=font_size, pad=title_pad)
+        ax.tick_params(axis='both', labelsize=font_size)
         axes.append(ax)
 
     # Colorbar (only for weight-plot mode)
     if not plot_mask_only:
         cax = fig.add_subplot(gs[0, -1])
         cbar = fig.colorbar(im, cax=cax)
-        cbar.set_label("Weight Value", fontsize=10)
-        cbar.ax.tick_params(labelsize=8)
+        cbar.set_label("Weight Value", fontsize=font_size, labelpad=label_pad)
+        cbar.ax.tick_params(labelsize=font_size)
 
     # Legend
     patches = [
@@ -572,16 +596,16 @@ for subtask in subtask_list:
         mpatches.Patch(color=subtask_mask_color, label='Mask in this subtask')
     ]
     fig.legend(handles=patches, loc='lower center', bbox_to_anchor=(0.7, 0.10),
-               ncol=1, fontsize=8)
+               ncol=1, fontsize=font_size)
 
-    fig.suptitle(f"Subtask {subtask} masked weights", fontsize=14)
+    fig.suptitle(f"Subtask {subtask} masked weights", fontsize=font_size)
     fig.text(
         0.5,
         0.01,
         f"{plot_info}",
         ha='center',
         va='bottom',
-        fontsize=8
+        fontsize=font_size
     )
     fig.text(
         0.5,
@@ -589,7 +613,7 @@ for subtask in subtask_list:
         mask_info,
         ha='left',
         va='bottom',
-        fontsize=8
+        fontsize=font_size
     )
-    plt.tight_layout(rect=[0, 0, 1, 0.95])
+    plt.tight_layout()
     plt.show()

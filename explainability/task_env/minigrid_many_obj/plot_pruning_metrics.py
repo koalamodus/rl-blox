@@ -1,6 +1,12 @@
 from aim import Repo
 import matplotlib.pyplot as plt
 
+file_name = "subnetwork_pruning_weights.pdf"
+save_fig = False
+font_size = 16
+label_pad = 1
+title_pad = 25
+
 subnet_colors = {
     "red": "#FF6666",      # moderately light red
     "blue": "#66B2FF",     # moderately light blue
@@ -32,10 +38,19 @@ for metric in metrics:
 
     plt.plot(steps, values, color=subnet_colors[subtask], label=f"task {subtask}")
 
-plt.xlabel("step")
-plt.ylabel("remaining weights (%)")
-plt.title("Subnetwork Weights Retained During Pruning")
-plt.legend()
+plt.xlabel("step", fontsize=font_size)
+plt.ylabel("remaining weights (%)", fontsize=font_size, labelpad=label_pad)
+plt.title("Subnetwork Weights Retained During Pruning", fontsize=font_size, pad=title_pad)
+plt.legend(loc='lower right', fontsize=font_size)
 
+plt.tick_params(axis='x', labelsize=font_size)
+plt.tick_params(axis='y', labelsize=font_size)
 plt.xlim(left=0)
+plt.ylim(bottom=0)
+plt.tight_layout()
+
+if save_fig:
+    import os
+    path = os.path.expanduser(f'~/Pictures/{file_name}')
+    plt.savefig(path)
 plt.show()
