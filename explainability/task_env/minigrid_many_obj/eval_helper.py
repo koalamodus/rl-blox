@@ -11,6 +11,12 @@ def eval_policy(color, env, policy, verbose=False, num_episode=1, seed=42):
     task_score_info = {}
     sum_reward = 0.0
     num_task_success = 0.0
+
+    obs, _ = env.reset(seed=seed)
+    color_coords = getattr(env.env, f"{color}_coords")
+    num_obj_per_color = len(color_coords)
+    # print(f"color_coords: {color_coords}, num_obj_per_color: {num_obj_per_color}")
+    
     for _ in range(num_episode):
         obs, _ = env.reset(seed=seed)
         terminated = truncated = False
@@ -27,7 +33,7 @@ def eval_policy(color, env, policy, verbose=False, num_episode=1, seed=42):
     task_score_info.update({
         f"Task {color}": {
             "Avg Return": sum_reward / num_episode,
-            "Success Rate": num_task_success / num_episode
+            "Success Rate": num_task_success / (num_episode*num_obj_per_color)
         }
     })
 
