@@ -71,6 +71,9 @@ print("Loaded model checkpoint.")
 def get_policy_from_q_net(q):
 
     def policy(obs):
+        print(f"q_values: {q([obs])}")
+        print(f"argmax: {jnp.argmax(q([obs]))}")
+        print(f"action: {int(jnp.argmax(q([obs])))}")
         return int(jnp.argmax(q([obs])))
 
     return policy
