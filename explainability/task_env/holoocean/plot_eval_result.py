@@ -34,87 +34,12 @@ subnet_colors = {
 full_color="#444444"
 full_network_label="full network"
 
-metric_to_plot = ["Success Rate"]
+metric_to_plot = "Success Rate"
+# metric_to_plot = "Avg Return"
 font_size=28
 label_pad=15
 y_label_coords=[-0.12, 0.5]
 
-def plot_full_and_subnets(
-    full_scores,
-    subnet_scores,
-    subtasks,
-    subnet_colors,
-    total_num_objects,
-    # title,
-    metrics=["Success Rate"],
-    full_network_label=full_network_label,
-    full_color=full_color,
-):
-    """
-    Plot full network + subnetwork performance in a single subplot.
-    """
-
-    metric = metrics[0]
-
-    y_label_abs = {
-        "Avg Return": "average return",
-        "Success Rate": "object found rate",
-    }
-
-    tasks = list(full_scores.keys())
-    x_tick_label = [f"task {t.split('Task ')[-1]}" for t in tasks]
-
-    n_tasks = len(tasks)
-    n_subnets = len(subtasks)
-    total_bars = n_subnets + 1  # full + subnets
-    bar_width = 0.8 / total_bars
-    x = np.arange(n_tasks)
-
-    fig, ax = plt.subplots(figsize=(12, 6))
-
-    # Full network (leftmost)
-    full_values = [full_scores[task][metric] / total_num_objects for task in tasks]
-    ax.bar(
-        x,
-        full_values,
-        width=bar_width,
-        color=full_color,
-        label=full_network_label,
-    )
-
-    # Subnetworks
-    for i, subtask in enumerate(subtasks):
-        values = [subnet_scores[subtask][task][metric] / total_num_objects for task in tasks]
-        ax.bar(
-            x + (i + 1) * bar_width,
-            values,
-            width=bar_width,
-            color=subnet_colors[subtask],
-            label=f"subnetwork {subtask}",
-        )
-
-    ax.set_ylabel(y_label_abs[metric], fontsize=font_size, labelpad=label_pad)
-    ax.set_ylim(0.0, 1.0)
-    ax.set_xticks(x + bar_width * (total_bars - 1) / 2)
-    ax.set_xticklabels(x_tick_label, fontsize=font_size)
-    ax.grid(axis="y")
-    ax.legend(fontsize=font_size)
-    ax.tick_params(axis='x', labelsize=font_size)  # x-axis numbers
-    ax.tick_params(axis='y', labelsize=font_size)  # y-axis numbers
-
-    # fig.suptitle(title, fontsize=16)
-    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-    plt.show()
-
-plot_full_and_subnets(
-    full_scores=full_scores,
-    subnet_scores=subnet_scores,
-    subtasks=subtasks,
-    subnet_colors=subnet_colors,
-    total_num_objects=total_num_objects,
-    # title="Full Network vs Subnetworks",
-    metrics=["Success Rate"],
-)
 
 def plot_full_subnet_with_drop(
     full_scores,
@@ -122,8 +47,7 @@ def plot_full_subnet_with_drop(
     relative_performance,
     subtasks,
     subnet_colors,
-    # title,
-    metrics=["Success Rate"],
+    metric,
     full_network_label=full_network_label,
     full_color=full_color,
 ):
@@ -133,8 +57,6 @@ def plot_full_subnet_with_drop(
 
     Ensures vertical alignment of bars across subplots.
     """
-
-    metric = metrics[0]
 
     y_label_abs = {
         "Avg Return": "average return",
@@ -186,7 +108,7 @@ def plot_full_subnet_with_drop(
     ax.set_ylabel(y_label_abs[metric], fontsize=font_size, labelpad=label_pad)
     ax.yaxis.set_label_coords(y_label_coords[0], y_label_coords[1])
     # ax.set_title("Absolute Performance", fontsize=font_size)
-    if metrics == ["Success Rate"]:
+    if metric == ["Success Rate"]:
         ax.set_ylim(0., 1.0)
     ax.grid(axis="y")
     ax.legend(fontsize=font_size)
@@ -233,7 +155,5 @@ plot_full_subnet_with_drop(
     subtasks=subtasks,
     subnet_colors=subnet_colors,
     full_color=full_color,
-    # title="Success rate of full network and subnetworks",
-    metrics=["Success Rate"],
-    # metrics=["Avg Return"],
+    metric=metric_to_plot,
 )
