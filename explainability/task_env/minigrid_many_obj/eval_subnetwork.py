@@ -106,7 +106,7 @@ print("Full network evaluation complete.")
 # Evaluate subnetworks
 # ---------------------------
 subnet_scores = {}
-performance_drop = {}
+relative_performance = {}
 
 for subtask in subtasks:
     step = int(file_name.split("_")[-3])
@@ -130,12 +130,12 @@ for subtask in subtasks:
         }
         for t in subtasks
     }
-    performance_drop[subtask] = drop
+    relative_performance[subtask] = drop
 
 print("Subnetwork evaluation complete.")
 print("Performance drop compared to full network:")
-for subtask, drops in performance_drop.items():
-    print(f"subnetwork {subtask}: {drops}")
+for subtask, p in relative_performance.items():
+    print(f"subnetwork {subtask}: {p}")
 
 # ---------------------------
 # Save evaluation result
@@ -146,7 +146,7 @@ import pickle
 eval_results = {
     "full_scores": full_scores,
     "subnet_scores": subnet_scores,
-    "performance_drop": performance_drop
+    "relative_performance": relative_performance
 }
 
 with open("evaluation_results.pkl", "wb") as f:
