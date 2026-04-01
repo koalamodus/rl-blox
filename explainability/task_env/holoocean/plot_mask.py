@@ -120,16 +120,16 @@ for i in range(num_layers):
 # ---------------------------
 # Plot params
 # ---------------------------
-save_fig = False
+save_fig = True
 
-font_size = 36
-w_space = 0.2
+font_size = 24
+w_space = 0.25
 label_pad = 10
-title_pad = 20
-scale = 0.2
-margin_width_ratio = 0
+title_pad = 15
+scale = 0.1
+margin_width_ratio = 0.0
 annotation_line_width = 2.0
-legend_pos = [0.2, 0.75]
+legend_pos = [0.2, 0.7]
 
 # ---------------------------
 # Plot
@@ -147,9 +147,12 @@ fig_height = max(W.shape[0] for W in layers_vis) * scale
 fig = plt.figure(figsize=(fig_width, fig_height))
 gs = fig.add_gridspec(1, len(layers_vis), width_ratios=width_ratios, wspace=w_space)
 
+axes_list = []
+
 for i, W in enumerate(layers_vis):
     ax = fig.add_subplot(gs[0, i])
     ax.imshow(W, cmap=cmap, aspect='equal', vmin=0, vmax=2)
+    axes_list.append(ax)
 
     if i == 0:
         ax.set_xlabel("output neuron index", fontsize=font_size, labelpad=label_pad)
@@ -168,23 +171,24 @@ for i, W in enumerate(layers_vis):
 
     # --- Add annotation for Hidden Layer 0 ---
     if i == 0:
-        x_axes = 1.01
-        y_axes = 1 - (num_current_context+num_task_context/2) / h
+        x_axes = 1.02
+        y_axes = 1 - (num_current_context+num_task_context/2 + 0.5) / h
+
+        overlap = 0.003
 
         turning_point_0 = [x_axes + 0.03, y_axes]
-        turning_point_1 = [x + y for x, y in zip(turning_point_0, [0, 0.3])]
-        print(turning_point_1)
-        turning_point_2 = [x + y for x, y in zip(turning_point_1, [-0.5, 0])]
+        turning_point_1 = [x + y for x, y in zip(turning_point_0, [0, 0.5])]
+        turning_point_2 = [x + y for x, y in zip(turning_point_1, [-0.15, 0])]
+        text_pos = [x + y for x, y in zip(turning_point_2, [-0.6, 0])]
 
         ax.annotate(
-            # "context encoding of subtasks",
             "",
             xy=(x_axes, y_axes),
             xycoords=ax.transAxes,
             xytext=(turning_point_0[0], turning_point_0[1]),
             textcoords=ax.transAxes,
             arrowprops=dict(
-                arrowstyle="-[,widthB=0.7,lengthB=0.3",
+                arrowstyle="-[,widthB=0.4,lengthB=0.3",
                 color="black",
                 linewidth=annotation_line_width,
             ),
@@ -196,9 +200,9 @@ for i, W in enumerate(layers_vis):
 
         ax.annotate(
             "",
-            xy=(turning_point_0[0], turning_point_0[1]),                  # arrow head (end)
+            xy=(turning_point_0[0] - overlap, turning_point_0[1] - overlap),                  # arrow head (end)
             xycoords=ax.transAxes,
-            xytext=(turning_point_1[0], turning_point_1[1]),        # arrow tail (start) 0.1 above
+            xytext=(turning_point_1[0] - overlap, turning_point_1[1] + overlap),        # arrow tail (start) 0.1 above
             textcoords=ax.transAxes,
             arrowprops=dict(
                 arrowstyle="-",  # bracket-style line
@@ -212,8 +216,7 @@ for i, W in enumerate(layers_vis):
         )
 
         ax.annotate(
-            # "",
-            "context encoding of subtasks",
+            "",
             xy=(turning_point_1[0], turning_point_1[1]),                  # arrow head (end)
             xycoords=ax.transAxes,
             xytext=(turning_point_2[0], turning_point_2[1]),        # arrow tail (start) 0.1 above
@@ -229,14 +232,26 @@ for i, W in enumerate(layers_vis):
             clip_on=False
         )
 
+        ax.annotate(
+            "context encoding of subtasks",
+            xy=(text_pos[0], text_pos[1]),                  # arrow head (end)
+            xycoords=ax.transAxes,
+            xytext=(text_pos[0], text_pos[1]),        # arrow tail (start) 0.1 above
+            textcoords=ax.transAxes,
+            fontsize=font_size,
+            color='black',
+            va='center',
+            clip_on=False
+        )
+
 
     # --- Add annotation for Output layer ---
     if i == len(layers_vis) - 1:
 
         # middle of axis (normalized coords)
         x_middle = 0.5
-        y_bracket = -0.05
-        y_text = -0.1
+        y_bracket = -0.07
+        y_text = -0.15
 
         ax.annotate(
             "actions",
@@ -255,6 +270,13 @@ for i, W in enumerate(layers_vis):
             color='black',
             clip_on=False
         )
+
+# Align bottoms
+bottom_y = 0.2
+for ax in axes_list:
+    pos = ax.get_position()
+    height = pos.height  # or pos.y1 - pos.y0
+    ax.set_position([pos.x0, bottom_y, pos.width, height])
 
 # Legend
 legend_patches = [
@@ -350,10 +372,12 @@ for s_idx, subtask in enumerate(subtask_list):
 
     fig = plt.figure(figsize=(fig_width, fig_height))
     gs = fig.add_gridspec(1, len(layers_vis), width_ratios=width_ratios, wspace=w_space)
+    axes_list = []
 
     for i, W in enumerate(layers_vis):
         ax = fig.add_subplot(gs[0, i])
         ax.imshow(W, cmap=cmap, aspect='equal', vmin=0, vmax=3)
+        axes_list.append(ax)
 
         if i == 0:
             ax.set_xlabel("output neuron index", fontsize=font_size, labelpad=label_pad)
@@ -374,16 +398,24 @@ for s_idx, subtask in enumerate(subtask_list):
         if i == 0:
             context = COLOR_TO_IDX[subtask]
 
-            arrow_x = 1.0
-            arrow_y = (6 - context - 0.5) / h
+            x_axes = 1.0
+            y_axes = 1 - (num_current_context + context + 0.5) / h
+
+            overlap = 0.003
+
+            turning_point_0 = [x_axes + 0.03, y_axes]
+            turning_point_1 = [x + y for x, y in zip(turning_point_0, [0, 0.5])]
+            turning_point_2 = [x + y for x, y in zip(turning_point_1, [-0.1, 0])]
+            text_pos = [x + y for x, y in zip(turning_point_2, [-0.7, 0])]
+            
             ax.annotate(
-                f"context encoding of subtask {subtask}",
-                xy=(arrow_x, arrow_y),
+                "",
+                xy=(x_axes, y_axes),
                 xycoords=ax.transAxes,
-                xytext=(arrow_x + 0.2, arrow_y),
+                xytext=(turning_point_0[0], turning_point_0[1]),
                 textcoords=ax.transAxes,
                 arrowprops=dict(
-                    arrowstyle="<-",
+                    arrowstyle="-",
                     color='black',
                     linewidth=annotation_line_width,
                 ),
@@ -392,6 +424,59 @@ for s_idx, subtask in enumerate(subtask_list):
                 va='center',
                 clip_on=False                       # allow drawing outside axis
             )
+
+            ax.annotate(
+                "",
+                xy=(turning_point_0[0] - overlap, turning_point_0[1] - overlap),                  # arrow head (end)
+                xycoords=ax.transAxes,
+                xytext=(turning_point_1[0] - overlap, turning_point_1[1] + overlap),        # arrow tail (start) 0.1 above
+                textcoords=ax.transAxes,
+                arrowprops=dict(
+                    arrowstyle="-",  # bracket-style line
+                    color="black",
+                    linewidth=annotation_line_width,
+                ),
+                fontsize=font_size,
+                color='black',
+                va='center',
+                clip_on=False
+            )
+
+            ax.annotate(
+                "",
+                xy=(turning_point_1[0], turning_point_1[1]),                  # arrow head (end)
+                xycoords=ax.transAxes,
+                xytext=(turning_point_2[0], turning_point_2[1]),        # arrow tail (start) 0.1 above
+                textcoords=ax.transAxes,
+                arrowprops=dict(
+                    arrowstyle="<-",  # bracket-style line
+                    color="black",
+                    linewidth=annotation_line_width,
+                ),
+                fontsize=font_size,
+                color='black',
+                va='center',
+                clip_on=False
+            )
+
+            ax.annotate(
+                f"context encoding of subtask {subtask}",
+                xy=(text_pos[0], text_pos[1]),                  # arrow head (end)
+                xycoords=ax.transAxes,
+                xytext=(text_pos[0], text_pos[1]),        # arrow tail (start) 0.1 above
+                textcoords=ax.transAxes,
+                fontsize=font_size,
+                color='black',
+                va='center',
+                clip_on=False
+            )
+    
+    # Align bottoms
+    bottom_y = 0.2
+    for ax in axes_list:
+        pos = ax.get_position()
+        height = pos.height  # or pos.y1 - pos.y0
+        ax.set_position([pos.x0, bottom_y, pos.width, height])
 
     # Legend
     legend_patches = [
