@@ -114,7 +114,7 @@ for i in range(num_layers):
 
     layers_vis.append(vis)
 
-    layer_name = "Output Layer" if i == num_layers - 1 else f"Hidden Layer {i}"
+    layer_name = "output layer" if i == num_layers - 1 else f"hidden layer {i}"
     titles.append(layer_name)
 
 # ---------------------------
@@ -152,8 +152,8 @@ for i, W in enumerate(layers_vis):
     ax.imshow(W, cmap=cmap, aspect='equal', vmin=0, vmax=2)
 
     if i == 0:
-        ax.set_xlabel("Output Neuron Index", fontsize=font_size, labelpad=label_pad)
-        ax.set_ylabel("Input Neuron Index", fontsize=font_size, labelpad=label_pad)
+        ax.set_xlabel("output neuron index", fontsize=font_size, labelpad=label_pad)
+        ax.set_ylabel("input neuron index", fontsize=font_size, labelpad=label_pad)
 
     h, w = W.shape
     ax.set_xlim(-0.5, w-0.5)
@@ -215,9 +215,9 @@ for i, W in enumerate(layers_vis):
 
 # Legend
 legend_patches = [
-    mpatches.Patch(color="#C2E1BCB7", label='Shared weights'),
-    mpatches.Patch(color='green', label='Task-specific weights'),
-    mpatches.Patch(facecolor='white', edgecolor='grey', linewidth=0.8, label='Masked (unused) weights')
+    mpatches.Patch(color="#C2E1BCB7", label='shared weights'),
+    mpatches.Patch(color='green', label='task-specific weights'),
+    mpatches.Patch(facecolor='white', edgecolor='grey', linewidth=0.8, label='masked (unused) weights')
 ]
 
 fig.legend(handles=legend_patches,
@@ -229,7 +229,7 @@ fig.legend(handles=legend_patches,
            handleheight=1.0,
            )
 
-fig.suptitle("Shared weight across subtasks", fontsize=font_size)
+fig.suptitle("shared weights across subtasks", fontsize=font_size)
 fig.text(
         0.5,
         0.01,
@@ -294,7 +294,7 @@ for s_idx, subtask in enumerate(subtask_list):
 
         layers_vis.append(vis)
 
-        layer_name = "Output Layer" if i == num_layers - 1 else f"Hidden Layer {i}"
+        layer_name = "output layer" if i == num_layers - 1 else f"hidden layer {i}"
         titles.append(layer_name)
 
     # ---------------------------
@@ -313,8 +313,8 @@ for s_idx, subtask in enumerate(subtask_list):
         ax.imshow(W, cmap=cmap, aspect='equal', vmin=0, vmax=3)
 
         if i == 0:
-            ax.set_xlabel("Output Neuron Index", fontsize=font_size, labelpad=label_pad)
-            ax.set_ylabel("Input Neuron Index", fontsize=font_size, labelpad=label_pad)
+            ax.set_xlabel("output neuron index", fontsize=font_size, labelpad=label_pad)
+            ax.set_ylabel("input neuron index", fontsize=font_size, labelpad=label_pad)
 
         h, w = W.shape
         ax.set_xlim(-0.5, w-0.5)
@@ -332,7 +332,7 @@ for s_idx, subtask in enumerate(subtask_list):
             context = COLOR_TO_IDX[subtask]
 
             arrow_x = 1.0
-            arrow_y = (6 - context) / h
+            arrow_y = (6 - context - 0.5) / h
             ax.annotate(
                 f"context encoding of subtask {subtask}",
                 xy=(arrow_x, arrow_y),
@@ -352,10 +352,10 @@ for s_idx, subtask in enumerate(subtask_list):
 
     # Legend
     legend_patches = [
-        mpatches.Patch(color="#C2E1BCB7", label='Shared weights across all tasks'),
-        mpatches.Patch(color='green', label='Task-specific weights'),
-        # mpatches.Patch(color='grey', label='Used in other subtasks'),
-        mpatches.Patch(facecolor='white', edgecolor='grey', linewidth=0.8, label='Masked (unused) weights')
+        mpatches.Patch(color="#C2E1BCB7", label='shared weights across tasks'),
+        mpatches.Patch(color='green', label='task-specific weights'),
+        # mpatches.Patch(color='grey', label='used in other subtasks'),
+        mpatches.Patch(facecolor='white', edgecolor='grey', linewidth=0.8, label='masked (unused) weights')
     ]
 
     fig.legend(handles=legend_patches,
@@ -367,7 +367,7 @@ for s_idx, subtask in enumerate(subtask_list):
                handleheight=1.0,
                )
 
-    fig.suptitle(f"Subnetwork {subtask}", fontsize=font_size)
+    fig.suptitle(f"subnetwork {subtask}", fontsize=font_size)
     fig.text(
         0.5,
         0.01,
@@ -406,7 +406,7 @@ for i in range(num_layers):
         masked_array = np.ma.masked_array(avg_weights, mask=zero_all_mask)
 
     masked_layers.append(masked_array)
-    layer_name = "Output Layer" if i == num_layers - 1 else f"Hidden Layer {i}"
+    layer_name = "output layer" if i == num_layers - 1 else f"hidden layer {i}"
     titles.append(layer_name)
 
 # ---------------------------
@@ -451,8 +451,8 @@ for i, W in enumerate(masked_layers):
     im = ax.imshow(W, cmap=custom_cmap, norm=norm, aspect='equal')
 
     if i == 0:
-        ax.set_xlabel("Output Neuron Index", fontsize=font_size, labelpad=label_pad)
-        ax.set_ylabel("Input Neuron Index", fontsize=font_size, labelpad=label_pad)
+        ax.set_xlabel("output neuron index", fontsize=font_size, labelpad=label_pad)
+        ax.set_ylabel("input neuron index", fontsize=font_size, labelpad=label_pad)
 
     h, w = W.shape
     ax.set_xlim(-0.5, w-0.5)
@@ -470,11 +470,11 @@ for i, W in enumerate(masked_layers):
 if not plot_mask_only:
     cax = fig.add_subplot(gs[0, -1])
     cbar = fig.colorbar(im, cax=cax)
-    cbar.set_label("Weight Value", fontsize=font_size, labelpad=label_pad)
+    cbar.set_label("weight value", fontsize=font_size, labelpad=label_pad)
     cbar.ax.tick_params(labelsize=font_size)
 
 # Figure title and bottom text
-fig.suptitle(f"Masked weights across all subtasks", fontsize=font_size)
+fig.suptitle(f"masked weights across all subtasks", fontsize=font_size)
 fig.text(
     0.5,
     0.01,
@@ -485,7 +485,7 @@ fig.text(
 )
 
 # Legend for masked weights
-masked_patch = mpatches.Patch(color=shared_mask_color, label='Mask in all subtasks')
+masked_patch = mpatches.Patch(color=shared_mask_color, label='mask in all subtasks')
 fig.legend(handles=[masked_patch], loc='lower center', bbox_to_anchor=(0.7, 0.15),
            ncol=1, fontsize=font_size)
 
@@ -523,12 +523,12 @@ for subtask in subtask_list:
         masked_array = np.ma.masked_array(plot_array, mask=zero_all_mask)
         masked_layers.append((masked_array, black_mask, zero_all_mask))
 
-        layer_name = "Output Layer" if i == num_layers - 1 else f"Hidden Layer {i}"
+        layer_name = "output layer" if i == num_layers - 1 else f"hidden layer {i}"
         titles.append(layer_name)
     
     mask_info = ""
     for i, (shared, subtask_only) in enumerate(layer_mask_info):
-        layer_name = "Output Layer" if i == num_layers - 1 else f"Hidden Layer {i}"
+        layer_name = "output layer" if i == num_layers - 1 else f"hidden layer {i}"
         mask_info += f"{layer_name}: {shared} shared, {subtask_only} task-specific\n"
 
 
@@ -570,8 +570,8 @@ for subtask in subtask_list:
         ax.imshow(subtask_overlay, cmap=LinearSegmentedColormap.from_list('subtask_mask', [subtask_mask_color, subtask_mask_color]), alpha=1.0)
 
         if i == 0:
-            ax.set_xlabel("Output Neuron Index", fontsize=font_size, labelpad=label_pad)
-            ax.set_ylabel("Input Neuron Index", fontsize=font_size, labelpad=label_pad)
+            ax.set_xlabel("output neuron index", fontsize=font_size, labelpad=label_pad)
+            ax.set_ylabel("input neuron index", fontsize=font_size, labelpad=label_pad)
 
         h, w = W_masked.shape
         ax.set_xlim(-0.5, w-0.5)
@@ -589,18 +589,18 @@ for subtask in subtask_list:
     if not plot_mask_only:
         cax = fig.add_subplot(gs[0, -1])
         cbar = fig.colorbar(im, cax=cax)
-        cbar.set_label("Weight Value", fontsize=font_size, labelpad=label_pad)
+        cbar.set_label("weight value", fontsize=font_size, labelpad=label_pad)
         cbar.ax.tick_params(labelsize=font_size)
 
     # Legend
     patches = [
-        mpatches.Patch(color=shared_mask_color, label='Mask across all subtasks'),
-        mpatches.Patch(color=subtask_mask_color, label='Mask in this subtask')
+        mpatches.Patch(color=shared_mask_color, label='mask across all subtasks'),
+        mpatches.Patch(color=subtask_mask_color, label='mask in this subtask')
     ]
     fig.legend(handles=patches, loc='lower center', bbox_to_anchor=(0.7, 0.10),
                ncol=1, fontsize=font_size)
 
-    fig.suptitle(f"Subtask {subtask} masked weights", fontsize=font_size)
+    fig.suptitle(f"subtask {subtask} masked weights", fontsize=font_size)
     fig.text(
         0.5,
         0.01,
