@@ -9,6 +9,7 @@ seed = 49  # random seed for np and jax
 key = jr.PRNGKey(seed)
 OBJ_COLORS = COLOR_NAMES
 subtasks = ["red", "blue", "purple", "grey"]
+# subtasks = COLOR_NAMES
 
 # ---------------------------
 # Load trained or pruned network

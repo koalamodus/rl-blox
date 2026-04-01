@@ -12,6 +12,8 @@ key = jr.PRNGKey(seed)
 # ---------------------------
 import orbax.checkpoint as ocp
 from rl_blox.blox.function_approximator.mlp import MLP
+from minigrid.core.constants import COLOR_NAMES
+subtasks = COLOR_NAMES
 
 # Choose ckpt from pre-trained full q-net
 
@@ -39,7 +41,7 @@ ckpt_full_net = os.path.expanduser(
 )
 
 # Set up environment to get input/output shapes
-subtask = "purple"
+subtask = subtasks[0]
 env = make_ocean_env(subtask)
 
 step = int(file_name.split("_")[-3])
@@ -112,7 +114,8 @@ custom_cmap = LinearSegmentedColormap.from_list("highlight_zero", colors)
 custom_cmap.set_bad(color='black')
 
 # Scale subplot sizes by matrix width
-width_ratios = [W.shape[1] for W in weights] + [1.5]  # last is colorbar
+margin_width_ratio = 1.5
+width_ratios = [W.shape[1] for W in weights] + [margin_width_ratio]  # last is colorbar
 
 # Scale figure size based on total width
 scale = 0.1  # tweak this to control overall size

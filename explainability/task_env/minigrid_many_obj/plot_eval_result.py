@@ -1,4 +1,8 @@
+# from minigrid.core.constants import COLOR_NAMES
+# subtasks = COLOR_NAMES
+
 subtasks = ["red", "blue", "purple", "grey"]
+save_fig = False
 
 
 # ---------------------------
@@ -25,7 +29,9 @@ subnet_colors = {
     "red": "#FF6666",      # moderately light red
     "blue": "#66B2FF",     # moderately light blue
     "purple": "#A566FF",   # moderately light purple
-    "grey": "#999999"      # moderately light grey
+    "grey": "#999999",     # moderately light grey
+    "green": "#66CC99",    # moderately light green
+    "yellow": "#FFD966",   # moderately light yellow
 }
 full_color="#444444"
 full_network_label="full network"
@@ -62,6 +68,11 @@ def plot_full_subnet_with_drop(
     y_label_rel = {
         "Avg Return": "relative performance",
         "Success Rate": "relative performance",
+    }
+
+    file_name = {
+        "Avg Return": "minigrid_avg_return",
+        "Success Rate": "minigrid_success_rate",
     }
 
     tasks = list(full_scores.keys())
@@ -107,7 +118,11 @@ def plot_full_subnet_with_drop(
     if metric == ["Success Rate"]:
         ax.set_ylim(0., 1.0)
     ax.grid(axis="y")
-    ax.legend(fontsize=font_size)
+    ax.legend(
+        # loc='upper center',
+        # bbox_to_anchor=(0.5, 1.15),  # move above plot
+        # ncol=3,
+        fontsize=font_size)
     ax.tick_params(axis='x', labelsize=font_size)  # x-axis numbers
     ax.tick_params(axis='y', labelsize=font_size)  # y-axis numbers
 
@@ -142,6 +157,12 @@ def plot_full_subnet_with_drop(
 
     # fig.suptitle(title, fontsize=16)
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+
+    if save_fig:
+        import os
+        path = os.path.expanduser(f'~/Pictures/{file_name[metric]}.pdf')
+        plt.savefig(path)
+
     plt.show()
 
 plot_full_subnet_with_drop(

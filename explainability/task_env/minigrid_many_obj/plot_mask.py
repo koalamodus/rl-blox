@@ -1,7 +1,6 @@
 import os
 from find_many_objects_env import make_ocean_env
-from minigrid.core.constants import COLOR_TO_IDX
-
+from minigrid.core.constants import COLOR_TO_IDX, COLOR_NAMES
 import flax.nnx as nnx
 import numpy as np
 
@@ -63,6 +62,8 @@ checkpointer = ocp.StandardCheckpointer()
 #--------------
 
 subtasks = ["purple", "blue", "grey", "red"]
+# subtasks = COLOR_NAMES
+
 weights_dict = {}
 
 for subtask in subtasks:
@@ -242,7 +243,7 @@ fig.text(
 # plt.tight_layout()
 
 if save_fig:
-    file_name = "shared_weights.pdf"
+    file_name = "minigrid_shared_weights.pdf"
     path = os.path.expanduser(f'~/Pictures/{file_name}')
     plt.savefig(path)
 
@@ -377,7 +378,7 @@ for s_idx, subtask in enumerate(subtask_list):
     )
 
     if save_fig:
-        file_name = f"subnetwork_{subtask}.pdf"
+        file_name = f"minigrid_subnetwork_{subtask}.pdf"
         path = os.path.expanduser(f'~/Pictures/{file_name}')
         plt.savefig(path)
 
@@ -429,7 +430,8 @@ subtask_mask_color = 'red' if plot_mask_only else 'yellow'
 custom_cmap.set_bad(color=shared_mask_color)  # Black for masked (zero in all subtasks)
 
 # Figure size and layout
-width_ratios = [W.shape[1] for W in masked_layers]
+margin_width_ratio = 1.5
+width_ratios = [W.shape[1] for W in masked_layers] + [margin_width_ratio]
 fig_width = (sum(width_ratios) + margin_width_ratio) * scale
 fig_height = max(W.shape[0] for W in masked_layers) * scale
 
@@ -531,7 +533,7 @@ for subtask in subtask_list:
 
 
     # Plot
-    width_ratios = [W.shape[1] for W, _, _ in masked_layers]
+    width_ratios = [W.shape[1] for W, _, _ in masked_layers] + [margin_width_ratio]
     fig_width = (sum(width_ratios) + margin_width_ratio) * scale
     fig_height = max(W.shape[0] for W, _, _ in masked_layers) * scale
     fig = plt.figure(figsize=(fig_width, fig_height))
