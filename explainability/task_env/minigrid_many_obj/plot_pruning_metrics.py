@@ -1,7 +1,7 @@
 from aim import Repo
 import matplotlib.pyplot as plt
 
-file_name = "subnetwork_pruning_weights.pdf"
+file_name = "minigrid_subnetwork_pruning_weights.pdf"
 save_fig = False
 font_size = 16
 label_pad = 1
@@ -14,8 +14,11 @@ subnet_colors = {
     "grey": "#999999"      # moderately light grey
 }
 
-repo = Repo(".")  # path to your Aim repo
-run_hash = ["bed5d8d8f2054ac9a45ae783","4622f6a875d74ad9a3f8574d","0e02dd4be3684817b54736af","951c1146502c47fb8df4e8be"]
+# repo = Repo(".")  # path to your Aim repo
+# run_hash = ["bed5d8d8f2054ac9a45ae783","4622f6a875d74ad9a3f8574d","0e02dd4be3684817b54736af","951c1146502c47fb8df4e8be"]  # laptop
+
+repo = Repo("./../../../")
+run_hash = ["7bb98971dd3e405db5637731","e09ee03271264a638cfeba9d","4dba83ec13fd4c7f96a6b7d5","616d750617a2408d9f4ed2ef"]  # desktop
 
 metrics = repo.query_metrics(
     f"metric.name == 'hard sparsity' and run.hash in {run_hash}"
