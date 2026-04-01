@@ -115,13 +115,13 @@ def plot_full_subnet_with_drop(
     ax.set_ylabel(y_label_abs[metric], fontsize=font_size, labelpad=label_pad)
     ax.yaxis.set_label_coords(y_label_coords[0], y_label_coords[1])
     # ax.set_title("Absolute Performance", fontsize=font_size)
-    if metric == ["Success Rate"]:
+    if metric == "Success Rate":
         ax.set_ylim(0., 1.0)
     ax.grid(axis="y")
     ax.legend(
-        # loc='upper center',
-        # bbox_to_anchor=(0.5, 1.15),  # move above plot
-        # ncol=3,
+        loc='upper center',
+        bbox_to_anchor=(0.5, 1.7),  # move above plot
+        ncol=2,
         fontsize=font_size)
     ax.tick_params(axis='x', labelsize=font_size)  # x-axis numbers
     ax.tick_params(axis='y', labelsize=font_size)  # y-axis numbers
@@ -144,7 +144,8 @@ def plot_full_subnet_with_drop(
 
     ax.set_ylabel(y_label_rel[metric], fontsize=font_size, labelpad=label_pad)
     # ax.set_title("Relative Performance", fontsize=font_size)
-    ax.set_ylim(0., 1.0)
+    if metric == "Success Rate":
+        ax.set_ylim(0., 1.0)
     ax.grid(axis="y")
     ax.yaxis.set_label_coords(y_label_coords[0], y_label_coords[1])
     ax.tick_params(axis='x', labelsize=font_size)  # x-axis numbers
@@ -156,7 +157,7 @@ def plot_full_subnet_with_drop(
     # axes[1].set_xlabel("Task", fontsize=font_size)
 
     # fig.suptitle(title, fontsize=16)
-    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    plt.tight_layout(rect=[0, 0, 1, 1])
 
     if save_fig:
         import os
