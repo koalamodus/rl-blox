@@ -120,8 +120,12 @@ def plot_full_subnet_with_drop(
     ax.grid(axis="y")
     ax.legend(
         loc='upper center',
-        bbox_to_anchor=(0.5, 1.7),  # move above plot
+        bbox_to_anchor=(0.5, 1.6),  # move above plot
         ncol=2,
+        # handlelength=1.5,     # length of color bar
+        handletextpad=0.8,      # space between color bar and label text
+        labelspacing=0.3,       # vertical spacing between legend entries
+        columnspacing=1.0,      # space between legend columns
         fontsize=font_size)
     ax.tick_params(axis='x', labelsize=font_size)  # x-axis numbers
     ax.tick_params(axis='y', labelsize=font_size)  # y-axis numbers
@@ -158,6 +162,7 @@ def plot_full_subnet_with_drop(
 
     # fig.suptitle(title, fontsize=16)
     plt.tight_layout(rect=[0, 0, 1, 1])
+    plt.subplots_adjust(hspace=0.2)
 
     if save_fig:
         import os
