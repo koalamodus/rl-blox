@@ -2,6 +2,7 @@ from holoocean_envs import TASK_NAMES
 
 # ["red", "blue", "green", "black"]
 subtasks = TASK_NAMES
+save_fig = False
 
 # ---------------------------
 # Load evaluation result
@@ -66,6 +67,11 @@ def plot_full_subnet_with_drop(
         "Success Rate": "relative performance",
     }
 
+    file_name = {
+        "Avg Return": "holoocean_avg_return",
+        "Success Rate": "holoocean_success_rate",
+    }
+
     tasks = list(full_scores.keys())
     x_tick_label = [f"task {t.split('Task ')[-1]}" for t in tasks]
 
@@ -109,7 +115,15 @@ def plot_full_subnet_with_drop(
     if metric == "Success Rate":
         ax.set_ylim(0., 1.0)
     ax.grid(axis="y")
-    ax.legend(fontsize=font_size)
+    ax.legend(
+        loc='upper center',
+        bbox_to_anchor=(0.5, 1.6),  # move above plot
+        ncol=2,
+        # handlelength=1.5,     # length of color bar
+        handletextpad=0.8,      # space between color bar and label text
+        labelspacing=0.3,       # vertical spacing between legend entries
+        columnspacing=1.0,      # space between legend columns
+        fontsize=font_size)
     ax.tick_params(axis='x', labelsize=font_size)  # x-axis numbers
     ax.tick_params(axis='y', labelsize=font_size)  # y-axis numbers
 
@@ -131,7 +145,8 @@ def plot_full_subnet_with_drop(
 
     ax.set_ylabel(y_label_rel[metric], fontsize=font_size, labelpad=label_pad)
     # ax.set_title("Relative Performance", fontsize=font_size)
-    ax.set_ylim(0., 1.0)
+    if metric == "Success Rate":
+        ax.set_ylim(0., 1.0)
     ax.grid(axis="y")
     ax.yaxis.set_label_coords(y_label_coords[0], y_label_coords[1])
     ax.tick_params(axis='x', labelsize=font_size)  # x-axis numbers
@@ -143,7 +158,14 @@ def plot_full_subnet_with_drop(
     # axes[1].set_xlabel("Task", fontsize=font_size)
 
     # fig.suptitle(title, fontsize=16)
-    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    plt.tight_layout(rect=[0, 0, 1, 1])
+    plt.subplots_adjust(hspace=0.2)
+
+    if save_fig:
+        import os
+        path = os.path.expanduser(f'~/Pictures/{file_name[metric]}.pdf')
+        plt.savefig(path)
+
     plt.show()
 
 plot_full_subnet_with_drop(
