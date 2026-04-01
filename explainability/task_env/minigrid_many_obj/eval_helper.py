@@ -1,5 +1,5 @@
 import os
-
+import numpy as np
 import flax.nnx as nnx
 import jax.numpy as jnp
 import orbax.checkpoint as ocp
@@ -16,9 +16,11 @@ def eval_policy(color, env, policy, verbose=False, num_episode=1, seed=42):
     color_coords = getattr(env.env, f"{color}_coords")
     num_obj_per_color = len(color_coords)
     # print(f"color_coords: {color_coords}, num_obj_per_color: {num_obj_per_color}")
+    rng = np.random.default_rng(seed=seed)
+    env_seeds = rng.integers(10000, size=num_episode).tolist()
     
-    for _ in range(num_episode):
-        obs, _ = env.reset(seed=seed)
+    for eps in range(num_episode):
+        obs, _ = env.reset(seed=env_seeds[eps])
         terminated = truncated = False
 
         while not (terminated or truncated):
