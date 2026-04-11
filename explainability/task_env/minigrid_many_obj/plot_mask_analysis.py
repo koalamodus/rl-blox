@@ -1,28 +1,13 @@
 import os
-# from find_many_objects_env import make_ocean_env
-# from minigrid.core.constants import COLOR_TO_IDX
-
+from find_many_objects_env import make_ocean_env
+from minigrid.core.constants import COLOR_TO_IDX, COLOR_NAMES
 import flax.nnx as nnx
 import numpy as np
 
 seed = 49  # random seed for np and jax
 plot_mask_only = True
 
-# ---------------------------
-# (1) HoloOcean env params
-# ---------------------------
-# TODO: use real environment
-
-subtasks = ["red", "blue", "green", "black"]
-COLOR_NAMES = subtasks
-
-# Used to map colors to integers
-COLOR_TO_IDX = {"red": 0, "blue": 1, "green": 2, "black": 3}
-
-num_current_context = 2
-num_task_context = 4
-
-
+num_task_context = len(COLOR_NAMES)
 # ---------------------------
 # (1) Load trained network
 # ---------------------------
@@ -30,12 +15,24 @@ import orbax.checkpoint as ocp
 from rl_blox.blox.function_approximator.mlp import MLP
 
 # Choose ckpt from pre-trained full q-net
-experiment = "holoocean"
+
+experiment = "reefshield_random_medium"
 randomize_env = True
 seed_num = 0
-file_name = "_minigrid_holoocean_medium_DDQN-UTS_1774215135.9690797_q_step_000250000_epoch_250000"
-model_hidden_nodes = [128, 128]
+file_name = "_minigrid_reefshield_random_medium_DDQN-UTS_1773787402.9864454_q_step_005000000_epoch_5000000"
+model_hidden_nodes = [32, 32]
 
+# experiment = "reefshield_fixed_medium"
+# randomize_env = False
+# seed_num = 0
+# file_name = "_minigrid_reefshield_fixed_medium_DDQN-UTS_1773675569.892775_q_step_001000000_epoch_1000000"
+# model_hidden_nodes = [32, 32]
+
+# experiment = "XRL_MINIGRID_POLICY"
+# randomize_env = False
+# seed_num = 48
+# file_name = "minigrid_reefshield_medium_DDQN-UTS_1773420833.4308155_q_step_001000000_epoch_1000000"
+# model_hidden_nodes = [128, 128]
 
 # Set up ckpt path
 ckpt_full_net = os.path.expanduser(
@@ -45,13 +42,13 @@ step = int(file_name.split("_")[-3])
 plot_info = f"{experiment}, seed {seed_num}, step {step}"
 
 # Set up environment to get input/output shapes
-subtask = subtasks[0]
-# env = make_ocean_env(subtask)
+subtask = "purple"
+env = make_ocean_env(subtask)
 
 # Recreate MLP with same architecture as training
 hparams_model = dict(
-    n_features=50,
-    n_outputs=5,
+    n_features=env.observation_space.shape[0],
+    n_outputs=int(env.action_space.n),
     activation="relu",
     hidden_nodes=model_hidden_nodes,
 )
@@ -64,10 +61,14 @@ graphdef, abstract_state = nnx.split(abstract_mlp)
 checkpointer = ocp.StandardCheckpointer()
 
 #--------------
+
+subtasks = ["purple", "blue", "grey", "red"]
+# subtasks = COLOR_NAMES
+
 weights_dict = {}
 
 for subtask in subtasks:
-    # env = make_ocean_env(subtask)
+    env = make_ocean_env(subtask)
     ckpt_subnet = os.path.expanduser(
         f"~/workspace/XRL/ocean_subnet/{experiment}/UTS/seed_{seed_num}/step_{step}/subnetwork_{subtask}"
     )
@@ -116,14 +117,14 @@ palette = sns.color_palette("colorblind")
 subtask_colors = {
     "red":   palette[3],  # vermillion
     "blue":  palette[0],  # blue
-    "green": palette[2],  # green
-    "black": palette[7],  # grey (closest usable)
+    "purple": palette[4], # green
+    "grey": palette[7],   # grey
 }
 
 LIGHT_GREY = [0.93, 0.93, 0.93]
 
 shared_weights_color = LIGHT_GREY
-partially_shared_weights_color = palette[4]  # purple
+partially_shared_weights_color = palette[6]  # pink
 
 
 # ---------------------------
@@ -173,13 +174,14 @@ for i in range(num_layers):
 # ---------------------------
 # Plot
 # ---------------------------
-font_size = 26
-scale = 0.1
-w_space = 0.25
-label_pad = 5
+font_size = 30
+scale = 0.2
+w_space = 0.7
+label_pad = 20
+# title_pad = 20
 margin_width_ratio = 0.0
-annotation_line_width = 2.0
-legend_pos = [0.25, 0.55]
+annotation_line_width = 1.5
+legend_pos = [0.7, 0.55]
 
 width_ratios = [W.shape[1] for W in layers_vis]
 fig_width = (sum(width_ratios) + margin_width_ratio) * scale
@@ -190,11 +192,15 @@ gs = fig.add_gridspec(1, len(layers_vis), width_ratios=width_ratios, wspace=w_sp
 
 axes_list = []
 label_str = "neuron index"
-xy_labels = [
-    f"(state)\ninput layer {label_str}",
-    f"first hidden layer {label_str}",
-    f"second hidden layer {label_str}",
-    f"output layer {label_str}\n(action)"
+x_labels = [
+    f"first hidden layer\n{label_str}",
+    f"second hidden layer\n{label_str}",
+    f"  output layer\n  {label_str}\n  (action)"
+]
+y_labels = [
+    f"input layer {label_str} (state)",
+    f"first hidden layer\n{label_str}",
+    f"    second hidden layer\n   {label_str}",
 ]
 for i, W in enumerate(layers_vis):
 
@@ -203,13 +209,13 @@ for i, W in enumerate(layers_vis):
     axes_list.append(ax)
 
     ax.set_ylabel(
-        xy_labels[i],
+        y_labels[i],
         fontsize=font_size,
         labelpad=label_pad
     )
 
     ax.set_xlabel(
-        xy_labels[i+1],
+        x_labels[i],
         fontsize=font_size,
         labelpad=label_pad
     )
@@ -224,73 +230,20 @@ for i, W in enumerate(layers_vis):
 
     # --- Add annotation for Hidden Layer 0 ---
     if i == 0:
-        x_axes = 1.02
-        y_axes = 1 - (num_current_context + num_task_context/2) / h
-
-        overlap = 0.003
-
-        turning_point_0 = [x_axes + 0.03, y_axes]
-        turning_point_1 = [x + y for x, y in zip(turning_point_0, [0, 0.25])]
-        turning_point_2 = [x + y for x, y in zip(turning_point_1, [-0.15, 0])]
-        text_pos = [x + y for x, y in zip(turning_point_2, [-0.5, 0])]
-
-        ax.annotate(
-            "",
-            xy=(x_axes, y_axes),
-            xycoords=ax.transAxes,
-            xytext=(turning_point_0[0], turning_point_0[1]),
-            textcoords=ax.transAxes,
-            arrowprops=dict(
-                arrowstyle="-[,widthB=0.3,lengthB=0.3",
-                color="black",
-                linewidth=annotation_line_width,
-            ),
-            fontsize=font_size,
-            color='black',
-            va='center',
-            clip_on=False
-        )
-
-        ax.annotate(
-            "",
-            xy=(turning_point_0[0] - overlap, turning_point_0[1] - overlap),                  # arrow head (end)
-            xycoords=ax.transAxes,
-            xytext=(turning_point_1[0] - overlap, turning_point_1[1] + overlap),        # arrow tail (start) 0.1 above
-            textcoords=ax.transAxes,
-            arrowprops=dict(
-                arrowstyle="-",  # bracket-style line
-                color="black",
-                linewidth=annotation_line_width,
-            ),
-            fontsize=font_size,
-            color='black',
-            va='center',
-            clip_on=False
-        )
-
-        ax.annotate(
-            "",
-            xy=(turning_point_1[0], turning_point_1[1]),                  # arrow head (end)
-            xycoords=ax.transAxes,
-            xytext=(turning_point_2[0], turning_point_2[1]),        # arrow tail (start) 0.1 above
-            textcoords=ax.transAxes,
-            arrowprops=dict(
-                arrowstyle="<-",  # bracket-style line
-                color="black",
-                linewidth=annotation_line_width,
-            ),
-            fontsize=font_size,
-            color='black',
-            va='center',
-            clip_on=False
-        )
+        x_axes = 1.05
+        y_axes = (num_task_context/2) / h
 
         ax.annotate(
             "task context variables",
-            xy=(text_pos[0], text_pos[1]),                  # arrow head (end)
+            xy=(x_axes, y_axes),
             xycoords=ax.transAxes,
-            xytext=(text_pos[0], text_pos[1]),        # arrow tail (start) 0.1 above
+            xytext=(x_axes + 0.15, y_axes),
             textcoords=ax.transAxes,
+            arrowprops=dict(
+                arrowstyle="<-[,widthB=0.7,lengthB=0.3",
+                color="black",
+                linewidth=annotation_line_width,
+            ),
             fontsize=font_size,
             color='black',
             va='center',
@@ -333,9 +286,9 @@ for i, W in enumerate(layers_vis):
 # ---------------------------
 # Aligh all subplots to bottom
 # ---------------------------
-bottom_y = 0.2
+bottom_y = 0.35
 
-for ax in axes_list:
+for ax in axes_list[1:]:
     pos = ax.get_position()
     height = pos.height
     ax.set_position([pos.x0, bottom_y, pos.width, height])
