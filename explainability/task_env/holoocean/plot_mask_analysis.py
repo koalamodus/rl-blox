@@ -159,10 +159,10 @@ for i in range(num_layers):
 # ---------------------------
 # Plot
 # ---------------------------
-font_size = 24
+font_size = 26
 scale = 0.1
-w_space = 0.5
-label_pad = 10
+w_space = 0.25
+label_pad = 3
 margin_width_ratio = 0.0
 annotation_line_width = 2.0
 legend_pos = [0.24, 0.5]
@@ -277,7 +277,7 @@ fig.legend(
     handleheight=1.0,
 )
 
-fig.suptitle("weights analysis across all subtasks", fontsize=font_size)
+fig.suptitle("subnetwork weights analysis across all tasks", fontsize=font_size)
 fig.text(
     0.5,
     0.01,
@@ -290,8 +290,9 @@ fig.text(
 # Save
 # ---------------------------
 save_fig = True
+plot_name = "subnet_weights_analysis"
 if save_fig:
-    path = os.path.expanduser('~/Pictures/all_subtasks_weights_analysis.pdf')
+    path = os.path.expanduser(f'~/Pictures/{experiment}_{plot_name}.pdf')
     plt.savefig(path)
 
 # plt.show()
