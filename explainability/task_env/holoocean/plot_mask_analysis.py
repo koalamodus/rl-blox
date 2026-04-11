@@ -89,6 +89,7 @@ print("Weights collected for all subtasks.")
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
+import seaborn as sns
 
 # ---------------------------
 # Inputs
@@ -99,18 +100,31 @@ num_layers = len(weights_dict[subtask_list[0]])
 # ---------------------------
 # Colors
 # ---------------------------
+palette = sns.color_palette("colorblind")
+
+# Seaborn colorblind palette indices:
+# 0: blue
+# 1: orange
+# 2: green
+# 3: red (vermillion)
+# 4: purple
+# 5: brown
+# 6: pink
+# 7: grey
+# 8: yellow-green (avoid as "yellow")
+
 subtask_colors = {
-    "red":   [1, 0, 0],
-    "blue":  [0, 0, 1],
-    "green": [0, 0.7, 0],
-    "black": [0, 0, 0],
+    "red":   palette[3],  # vermillion
+    "blue":  palette[0],  # blue
+    "green": palette[2],  # green
+    "black": palette[7],  # grey (closest usable)
 }
 
 LIGHT_GREY = [0.93, 0.93, 0.93]
-YELLOW = [1.0, 0.85, 0.2]
 
 shared_weights_color = LIGHT_GREY
-partially_shared_weights_color = YELLOW
+partially_shared_weights_color = palette[4]  # purple
+
 
 # ---------------------------
 # Build visualization
