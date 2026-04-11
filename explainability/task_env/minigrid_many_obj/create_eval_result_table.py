@@ -162,6 +162,41 @@ def plot_heatmaps(
     
     plt.show()
 
+def normalize_metric_dict(data, metric, vmin, vmax):
+    """
+    Works for:
+    - full_scores: {task: {metric: value}}
+    - subnet_scores[subtask]: {task: {metric: value}}
+    """
+
+    def normalize(x):
+        if vmax == vmin:
+            raise ValueError(f"Cannot normalize when vmax == vmin == {vmin}")
+        return (x - vmin) / (vmax - vmin)
+
+    normalized = {}
+
+    for key, metrics in data.items():
+        normalized[key] = metrics.copy()
+        normalized[key][metric] = normalize(metrics[metric])
+
+    return normalized
+
+def normalize_full_scores(full_scores, metric, vmin, vmax):
+    return normalize_metric_dict(full_scores, metric, vmin, vmax)
+
+def normalize_subnet_scores(subnet_scores, subtasks, metric, vmin, vmax):
+    normalized = {}
+
+    for subtask in subtasks:
+        normalized[subtask] = normalize_metric_dict(
+            subnet_scores[subtask],
+            metric,
+            vmin,
+            vmax
+        )
+
+    return normalized
 
 
 # ---------------------------
@@ -193,6 +228,17 @@ with open(eval_result_path, "rb") as f:
 full_scores = eval_results["full_scores"]
 subnet_scores = eval_results["subnet_scores"]
 relative_performance = eval_results["relative_performance"]
+
+# Normalize Avg Return
+metric = metric_to_plot
+if metric_to_plot == "Avg Return":
+    vmin = -200
+    vmax = 10
+full_scores = normalize_metric_dict(full_scores, metric, vmin, vmax)
+subnet_scores = {
+    s: normalize_metric_dict(subnet_scores[s], metric, vmin, vmax)
+    for s in subtasks
+}
 
 abs_df, rel_df = build_performance_tables(
     full_scores,
