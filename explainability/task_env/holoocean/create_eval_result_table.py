@@ -7,7 +7,7 @@ def build_performance_tables(
     subnet_scores,
     relative_performance,
     subtasks,
-    metric="Success Rate",
+    metric="Avg Return",
 ):
     """
     Create tables instead of bar plots:
@@ -74,7 +74,7 @@ def plot_heatmaps(
     annot=True,
 ):
     tasks = list(full_scores.keys())
-    x_labels = [f"task {t.split('Task ')[-1]}" for t in tasks]
+    x_labels = [f"{t.split('Task ')[-1]}" for t in tasks]
 
     # ---------------------------
     # Absolute performance matrix
@@ -98,41 +98,59 @@ def plot_heatmaps(
     rel_df = pd.DataFrame(index=x_labels)
 
     for subtask in subtasks:
-        rel_df[f"subnet {subtask}"] = [
+        rel_df[f"{subtask}"] = [
             relative_performance[subtask][t][metric] for t in tasks
         ]
 
     # ---------------------------
     # Plot
     # ---------------------------
-    fig, axes = plt.subplots(2, 1, figsize=(figsize[0], figsize[1] * 2))
+    line_width = 0.2
+    font_size = 12
+    x_label = ["Networks", "Subnetworks"]
+    y_label = "Tasks"
 
-    # --- Absolute heatmap ---
-    sns.heatmap(
-        abs_df,
-        ax=axes[0],
+    fig, axes = plt.subplots(2, 1, figsize=(figsize[0], figsize[1] * 2))
+    axes[0].set_aspect("auto")
+    axes[1].set_aspect("auto")
+    axes[0].tick_params(labelsize=8)
+    axes[1].tick_params(labelsize=8)
+
+    heatmap_kws = dict(
         cmap=cmap,
         annot=annot,
         fmt=".2f",
-        linewidths=0.5,
+        linewidths=0.2,
+        linecolor="white",
         cbar=True,
+        annot_kws={"size": font_size},
     )
-    axes[0].set_title("Absolute Performance")
+
+    
+    # --- Absolute heatmap ---
+    sns.heatmap(abs_df, ax=axes[0], **heatmap_kws)
+    axes[0].set_title(f"Normalized {metric}", fontsize=font_size)
+    axes[0].tick_params(axis="both", labelsize=font_size)
+    axes[0].set_xlabel(x_label[0], fontsize=font_size)
+    axes[0].set_ylabel(y_label, fontsize=font_size)
+
 
     # --- Relative heatmap ---
-    sns.heatmap(
-        rel_df,
-        ax=axes[1],
-        cmap=cmap,
-        annot=annot,
-        fmt=".2f",
-        linewidths=0.5,
-        cbar=True,
-    )
-    axes[1].set_title("Relative Performance")
+    sns.heatmap(rel_df, ax=axes[1], **heatmap_kws)
+    axes[1].set_title(f"Relative {metric}", fontsize=font_size)
+    axes[1].tick_params(axis="both", labelsize=font_size)
+    axes[1].set_xlabel(x_label[1], fontsize=font_size)
+    axes[1].set_ylabel(y_label, fontsize=font_size)
+
+    # ---------------------------
+    # Colorbar font size fix
+    # ---------------------------
+    for ax in axes:
+        cbar = ax.collections[0].colorbar
+        cbar.ax.tick_params(labelsize=font_size)
 
     plt.tight_layout()
-    
+
     if save_fig:
         remap_metric = {
             "Avg Return": "avg_return",
@@ -141,10 +159,62 @@ def plot_heatmaps(
         metric = remap_metric[metric]
         path = os.path.expanduser(f'~/Pictures/{experiment}_{metric}_heaptmap.pdf')
         plt.savefig(path)
-
+    
     plt.show()
 
+def normalize_metric_dict(data, metric, vmin, vmax):
+    """
+    Works for:
+    - full_scores: {task: {metric: value}}
+    - subnet_scores[subtask]: {task: {metric: value}}
+    """
 
+    def normalize(x):
+        if vmax == vmin:
+            raise ValueError(f"Cannot normalize when vmax == vmin == {vmin}")
+        return (x - vmin) / (vmax - vmin)
+
+    normalized = {}
+
+    for key, metrics in data.items():
+        normalized[key] = metrics.copy()
+        normalized[key][metric] = normalize(metrics[metric])
+
+    return normalized
+
+def normalize_full_scores(full_scores, metric, vmin, vmax):
+    return normalize_metric_dict(full_scores, metric, vmin, vmax)
+
+def normalize_subnet_scores(subnet_scores, subtasks, metric, vmin, vmax):
+    normalized = {}
+
+    for subtask in subtasks:
+        normalized[subtask] = normalize_metric_dict(
+            subnet_scores[subtask],
+            metric,
+            vmin,
+            vmax
+        )
+
+    return normalized
+
+def compute_relative_performance(subtasks, subnet_scores, full_scores):
+    relative_performance = {}
+
+    for subtask in subtasks:
+        scores = subnet_scores[subtask]
+
+        rel_perform = {
+            f"Task {t}": {
+                metric: scores[f"Task {t}"][metric] / full_scores[f"Task {t}"][metric]
+                for metric in full_scores[f"Task {t}"]
+            }
+            for t in subtasks
+        }
+
+        relative_performance[subtask] = rel_perform
+
+    return relative_performance
 
 # ---------------------------
 # Set env
@@ -177,6 +247,20 @@ with open(eval_result_path, "rb") as f:
 full_scores = eval_results["full_scores"]
 subnet_scores = eval_results["subnet_scores"]
 relative_performance = eval_results["performance_drop"]
+
+# Normalize Avg Return
+metric = metric_to_plot
+if metric_to_plot == "Avg Return":
+    vmin = -1000
+    vmax = 1000
+full_scores = normalize_metric_dict(full_scores, metric, vmin, vmax)
+subnet_scores = {
+    s: normalize_metric_dict(subnet_scores[s], metric, vmin, vmax)
+    for s in subtasks
+}
+# Recompute relative avg return
+
+relative_performance = compute_relative_performance(subtasks, subnet_scores, full_scores)
 
 abs_df, rel_df = build_performance_tables(
     full_scores,
