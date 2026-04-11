@@ -82,13 +82,13 @@ def plot_heatmaps(
     abs_df = pd.DataFrame(index=x_labels)
 
     # full network
-    abs_df["full_network"] = [
+    abs_df["full network"] = [
         full_scores[t][metric] for t in tasks
     ]
 
     # subnetworks
     for subtask in subtasks:
-        abs_df[f"subnet_{subtask}"] = [
+        abs_df[f"subnet {subtask}"] = [
             subnet_scores[subtask][t][metric] for t in tasks
         ]
 
@@ -98,7 +98,7 @@ def plot_heatmaps(
     rel_df = pd.DataFrame(index=x_labels)
 
     for subtask in subtasks:
-        rel_df[f"subnet_{subtask}"] = [
+        rel_df[f"subnet {subtask}"] = [
             relative_performance[subtask][t][metric] for t in tasks
         ]
 
@@ -132,6 +132,16 @@ def plot_heatmaps(
     axes[1].set_title("Relative Performance")
 
     plt.tight_layout()
+    
+    if save_fig:
+        remap_metric = {
+            "Avg Return": "avg_return",
+            "Success Rate": "success_rate",
+        }
+        metric = remap_metric[metric]
+        path = os.path.expanduser(f'~/Pictures/{experiment}_{metric}_heaptmap.pdf')
+        plt.savefig(path)
+
     plt.show()
 
 
@@ -143,7 +153,7 @@ from holoocean_envs import TASK_NAMES
 
 # ["red", "blue", "green", "black"]
 subtasks = TASK_NAMES
-# save_plot = True
+save_fig = True
 # metric_to_plot = "Success Rate"
 metric_to_plot = "Avg Return"
 # ---------------------------
