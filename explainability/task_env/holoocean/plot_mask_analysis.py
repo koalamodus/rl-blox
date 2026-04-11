@@ -161,11 +161,11 @@ for i in range(num_layers):
 # ---------------------------
 font_size = 24
 scale = 0.1
-w_space = 0.25
+w_space = 0.5
 label_pad = 10
 margin_width_ratio = 0.0
 annotation_line_width = 2.0
-legend_pos = [0.2, 0.7]
+legend_pos = [0.24, 0.5]
 
 width_ratios = [W.shape[1] for W in layers_vis]
 fig_width = (sum(width_ratios) + margin_width_ratio) * scale
@@ -175,8 +175,13 @@ fig = plt.figure(figsize=(fig_width, fig_height))
 gs = fig.add_gridspec(1, len(layers_vis), width_ratios=width_ratios, wspace=w_space)
 
 axes_list = []
-
-xy_labels = ["input layer index (state)", "hidden layer 0 index", "hidden layer 1 index", "output layer index (action)"]
+label_str = "neuron index"
+xy_labels = [
+    f"(state)\ninput layer {label_str}",
+    f"hidden layer 0 {label_str}",
+    f"hidden layer 1 {label_str}",
+    f"output layer {label_str}\n(action)"
+]
 for i, W in enumerate(layers_vis):
 
     ax = fig.add_subplot(gs[0, i])
@@ -249,17 +254,17 @@ for ax in axes_list:
 # Legend
 # ---------------------------
 legend_patches = [
-    mpatches.Patch(color=shared_weights_color, label='used by all subtasks'),
-    mpatches.Patch(color=partially_shared_weights_color, label='shared (partial)'),
+    mpatches.Patch(color=shared_weights_color, label='shared weights across all tasks'),
+    mpatches.Patch(color=partially_shared_weights_color, label='partially shared weights'),
 ]
 
 for subtask in subtask_list:
     legend_patches.append(
-        mpatches.Patch(color=subtask_colors[subtask], label=f'exclusive ({subtask})')
+        mpatches.Patch(color=subtask_colors[subtask], label=f'task {subtask} specific weights')
     )
 
 legend_patches.append(
-    mpatches.Patch(facecolor='white', edgecolor='grey', linewidth=0.8, label='unused')
+    mpatches.Patch(facecolor='white', edgecolor='grey', linewidth=0.8, label='unused weights')
 )
 
 fig.legend(
@@ -273,7 +278,14 @@ fig.legend(
 )
 
 fig.suptitle("weights analysis across all subtasks", fontsize=font_size)
-
+fig.text(
+    0.5,
+    0.01,
+    f"{plot_info}",
+    ha='center',
+    va='bottom',
+    fontsize=font_size
+)
 # ---------------------------
 # Save
 # ---------------------------
