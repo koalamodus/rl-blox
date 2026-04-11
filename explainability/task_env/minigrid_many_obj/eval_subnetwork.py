@@ -123,15 +123,15 @@ for subtask in subtasks:
     scores = evaluate_policy_on_task(policy_sub, task=subtasks, num_episode=eval_num_episode, seed=seed)
     subnet_scores[subtask] = scores
 
-    # Compute performance drop relative to full network
-    drop = {
+    # Compute performance relative to full network
+    rel_perform = {
         f"Task {t}": {
             metric: scores[f"Task {t}"][metric] / full_scores[f"Task {t}"][metric] 
             for metric in full_scores[f"Task {t}"]
         }
         for t in subtasks
     }
-    relative_performance[subtask] = drop
+    relative_performance[subtask] = rel_perform
 
 print("Subnetwork evaluation complete.")
 print("Performance drop compared to full network:")
