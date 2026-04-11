@@ -7,7 +7,7 @@ def build_performance_tables(
     subnet_scores,
     relative_performance,
     subtasks,
-    metric="Success Rate",
+    metric="Avg Return",
 ):
     """
     Create tables instead of bar plots:
@@ -129,7 +129,7 @@ def plot_heatmaps(
     
     # --- Absolute heatmap ---
     sns.heatmap(abs_df, ax=axes[0], **heatmap_kws)
-    axes[0].set_title(f"Absolute {metric}", fontsize=font_size)
+    axes[0].set_title(f"Normalized {metric}", fontsize=font_size)
     axes[0].tick_params(axis="both", labelsize=font_size)
     axes[0].set_xlabel(x_label[0], fontsize=font_size)
     axes[0].set_ylabel(y_label, fontsize=font_size)
@@ -198,6 +198,23 @@ def normalize_subnet_scores(subnet_scores, subtasks, metric, vmin, vmax):
 
     return normalized
 
+def compute_relative_performance(subtasks, subnet_scores, full_scores):
+    relative_performance = {}
+
+    for subtask in subtasks:
+        scores = subnet_scores[subtask]
+
+        rel_perform = {
+            f"Task {t}": {
+                metric: scores[f"Task {t}"][metric] / full_scores[f"Task {t}"][metric]
+                for metric in full_scores[f"Task {t}"]
+            }
+            for t in subtasks
+        }
+
+        relative_performance[subtask] = rel_perform
+
+    return relative_performance
 
 # ---------------------------
 # Set env
@@ -239,6 +256,9 @@ subnet_scores = {
     s: normalize_metric_dict(subnet_scores[s], metric, vmin, vmax)
     for s in subtasks
 }
+# Recompute relative avg return
+
+relative_performance = compute_relative_performance(subtasks, subnet_scores, full_scores)
 
 abs_df, rel_df = build_performance_tables(
     full_scores,
