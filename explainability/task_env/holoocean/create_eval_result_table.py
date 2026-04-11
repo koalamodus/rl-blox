@@ -1,5 +1,6 @@
 import pandas as pd
-import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 def build_performance_tables(
     full_scores,
@@ -62,6 +63,79 @@ def build_performance_tables(
 
     return abs_df, rel_df
 
+def plot_heatmaps(
+    full_scores,
+    subnet_scores,
+    relative_performance,
+    subtasks,
+    metric="Success Rate",
+    figsize=(10, 6),
+    cmap="viridis",
+    annot=True,
+):
+    tasks = list(full_scores.keys())
+    x_labels = [f"task {t.split('Task ')[-1]}" for t in tasks]
+
+    # ---------------------------
+    # Absolute performance matrix
+    # ---------------------------
+    abs_df = pd.DataFrame(index=x_labels)
+
+    # full network
+    abs_df["full_network"] = [
+        full_scores[t][metric] for t in tasks
+    ]
+
+    # subnetworks
+    for subtask in subtasks:
+        abs_df[f"subnet_{subtask}"] = [
+            subnet_scores[subtask][t][metric] for t in tasks
+        ]
+
+    # ---------------------------
+    # Relative performance matrix
+    # ---------------------------
+    rel_df = pd.DataFrame(index=x_labels)
+
+    for subtask in subtasks:
+        rel_df[f"subnet_{subtask}"] = [
+            relative_performance[subtask][t][metric] for t in tasks
+        ]
+
+    # ---------------------------
+    # Plot
+    # ---------------------------
+    fig, axes = plt.subplots(2, 1, figsize=(figsize[0], figsize[1] * 2))
+
+    # --- Absolute heatmap ---
+    sns.heatmap(
+        abs_df,
+        ax=axes[0],
+        cmap=cmap,
+        annot=annot,
+        fmt=".2f",
+        linewidths=0.5,
+        cbar=True,
+    )
+    axes[0].set_title("Absolute Performance")
+
+    # --- Relative heatmap ---
+    sns.heatmap(
+        rel_df,
+        ax=axes[1],
+        cmap=cmap,
+        annot=annot,
+        fmt=".2f",
+        linewidths=0.5,
+        cbar=True,
+    )
+    axes[1].set_title("Relative Performance")
+
+    plt.tight_layout()
+    plt.show()
+
+
+
 # ---------------------------
 # Set env
 # ---------------------------
@@ -110,3 +184,14 @@ print(abs_df.to_string(index=False))
 
 print("\n=== Relative Performance ===")
 print(rel_df.to_string(index=False))
+
+# ---------------------------
+# Heatmaps
+# ---------------------------
+plot_heatmaps(
+    full_scores=full_scores,
+    subnet_scores=subnet_scores,
+    relative_performance=relative_performance,
+    subtasks=subtasks,
+    metric=metric_to_plot,
+)
