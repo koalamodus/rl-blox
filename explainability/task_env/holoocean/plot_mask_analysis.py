@@ -189,12 +189,11 @@ for i, W in enumerate(layers_vis):
         labelpad=label_pad
     )
 
-    if i != len(layers_vis) - 1:
-        ax.set_xlabel(
-            xy_labels[i+1],
-            fontsize=font_size,
-            labelpad=label_pad
-        )
+    ax.set_xlabel(
+        xy_labels[i+1],
+        fontsize=font_size,
+        labelpad=label_pad
+    )
 
     h, w = W.shape[:2]
     ax.set_xlim(-0.5, w - 0.5)
@@ -213,28 +212,28 @@ for i, W in enumerate(layers_vis):
         ax.set_xticks([0, w - 1])
         ax.set_xticklabels([0, w - 1])
 
-        # action annotation
-        x_middle = 0.5
-        y_bracket = -0.07
-        y_text = -0.15
+    #     # action annotation
+    #     x_middle = 0.5
+    #     y_bracket = -0.07
+    #     y_text = -0.15
 
-        ax.annotate(
-            "actions",
-            xy=(x_middle, y_bracket),
-            xycoords=ax.transAxes,
-            xytext=(x_middle, y_text),
-            textcoords=ax.transAxes,
-            ha="center",
-            va="top",
-            arrowprops=dict(
-                arrowstyle="<-[,widthB=0.5,lengthB=0.3",
-                color="black",
-                linewidth=annotation_line_width,
-            ),
-            fontsize=font_size,
-            color='black',
-            clip_on=False
-        )
+    #     ax.annotate(
+    #         "actions",
+    #         xy=(x_middle, y_bracket),
+    #         xycoords=ax.transAxes,
+    #         xytext=(x_middle, y_text),
+    #         textcoords=ax.transAxes,
+    #         ha="center",
+    #         va="top",
+    #         arrowprops=dict(
+    #             arrowstyle="<-[,widthB=0.5,lengthB=0.3",
+    #             color="black",
+    #             linewidth=annotation_line_width,
+    #         ),
+    #         fontsize=font_size,
+    #         color='black',
+    #         clip_on=False
+    #     )
 
 # ---------------------------
 # Aligh all subplots to bottom
