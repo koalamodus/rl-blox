@@ -9,7 +9,7 @@ seed = 49  # random seed for np and jax
 plot_mask_only = True
 
 # ---------------------------
-# (1) HoloOcean env params
+# (0) HoloOcean env params
 # ---------------------------
 # TODO: use real environment
 
@@ -123,7 +123,7 @@ subtask_colors = {
 LIGHT_GREY = [0.93, 0.93, 0.93]
 
 shared_weights_color = LIGHT_GREY
-partially_shared_weights_color = palette[4]  # purple
+partially_shared_weights_color = palette[6]  # pink
 
 
 # ---------------------------
