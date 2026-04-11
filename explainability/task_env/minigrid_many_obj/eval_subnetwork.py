@@ -150,7 +150,7 @@ eval_results = {
     "relative_performance": relative_performance
 }
 
-with open("evaluation_results.pkl", "wb") as f:
+with open("minigrid_evaluation_results.pkl", "wb") as f:
     pickle.dump(eval_results, f)
 
 print("All evaluation results saved in 'evaluation_results.pkl'.")
