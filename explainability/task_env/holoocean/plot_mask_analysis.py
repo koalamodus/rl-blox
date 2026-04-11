@@ -116,7 +116,6 @@ partially_shared_weights_color = YELLOW
 # Build visualization
 # ---------------------------
 layers_vis = []
-titles = []
 
 for i in range(num_layers):
 
@@ -157,18 +156,19 @@ for i in range(num_layers):
 
     layers_vis.append(rgb)
 
-    layer_name = "output layer" if i == num_layers - 1 else f"hidden layer {i}"
-    titles.append(layer_name)
-
 # ---------------------------
 # Plot
 # ---------------------------
 font_size = 24
 scale = 0.1
 w_space = 0.25
+label_pad = 10
+margin_width_ratio = 0.0
+annotation_line_width = 2.0
+legend_pos = [0.2, 0.7]
 
 width_ratios = [W.shape[1] for W in layers_vis]
-fig_width = sum(width_ratios) * scale
+fig_width = (sum(width_ratios) + margin_width_ratio) * scale
 fig_height = max(W.shape[0] for W in layers_vis) * scale
 
 fig = plt.figure(figsize=(fig_width, fig_height))
@@ -183,14 +183,58 @@ for i, W in enumerate(layers_vis):
     axes_list.append(ax)
 
     if i == 0:
-        ax.set_xlabel("output neuron index", fontsize=font_size)
-        ax.set_ylabel("input neuron index", fontsize=font_size)
+        ax.set_xlabel("output neuron index", fontsize=font_size, labelpad=label_pad)
+        ax.set_ylabel("input neuron index", fontsize=font_size, labelpad=label_pad)
 
     h, w = W.shape[:2]
     ax.set_xlim(-0.5, w - 0.5)
     ax.set_ylim(h - 0.5, -0.5)
 
-    ax.set_title(titles[i], fontsize=font_size)
+    ax.tick_params(axis='both', labelsize=font_size)
+
+    
+    # ---------------------------
+    # last layer xtick and action annotation
+    # ---------------------------
+    if i == len(layers_vis) - 1:
+        # set xtick
+        w = W.shape[1]
+
+        ax.set_xticks([0, w - 1])
+        ax.set_xticklabels([0, w - 1])
+
+        # action annotation
+        x_middle = 0.5
+        y_bracket = -0.07
+        y_text = -0.15
+
+        ax.annotate(
+            "actions",
+            xy=(x_middle, y_bracket),
+            xycoords=ax.transAxes,
+            xytext=(x_middle, y_text),
+            textcoords=ax.transAxes,
+            ha="center",
+            va="top",
+            arrowprops=dict(
+                arrowstyle="<-[,widthB=0.5,lengthB=0.3",
+                color="black",
+                linewidth=annotation_line_width,
+            ),
+            fontsize=font_size,
+            color='black',
+            clip_on=False
+        )
+
+# ---------------------------
+# Aligh all subplots to bottom
+# ---------------------------
+bottom_y = 0.2
+
+for ax in axes_list:
+    pos = ax.get_position()
+    height = pos.height
+    ax.set_position([pos.x0, bottom_y, pos.width, height])
 
 # ---------------------------
 # Legend
@@ -206,24 +250,27 @@ for subtask in subtask_list:
     )
 
 legend_patches.append(
-    mpatches.Patch(facecolor='white', edgecolor='grey', label='unused')
+    mpatches.Patch(facecolor='white', edgecolor='grey', linewidth=0.8, label='unused')
 )
 
 fig.legend(
     handles=legend_patches,
     loc='lower center',
-    ncol=2,
-    fontsize=font_size
+    bbox_to_anchor=(legend_pos[0], legend_pos[1]),
+    ncol=1,
+    fontsize=font_size,
+    handlelength=1.0,
+    handleheight=1.0,
 )
 
-fig.suptitle("Weights Analysis Across All Subtasks", fontsize=font_size)
+fig.suptitle("weights analysis across all subtasks", fontsize=font_size)
 
 # ---------------------------
 # Save
 # ---------------------------
 save_fig = True
 if save_fig:
-    path = os.path.expanduser('~/Pictures/all_subtasks_shared_exclusive.pdf')
+    path = os.path.expanduser('~/Pictures/all_subtasks_weights_analysis.pdf')
     plt.savefig(path)
 
 # plt.show()
