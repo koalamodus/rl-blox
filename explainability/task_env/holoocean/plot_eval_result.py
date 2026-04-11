@@ -2,14 +2,21 @@ from holoocean_envs import TASK_NAMES
 
 # ["red", "blue", "green", "black"]
 subtasks = TASK_NAMES
-save_fig = False
+save_fig = True
 
 # ---------------------------
 # Load evaluation result
 # ---------------------------
+import os
 import pickle
 
-with open("holoocean_evaluation_results.pkl", "rb") as f:
+experiment = "holoocean"
+file_name = "holoocean_evaluation_results.pkl"
+
+eval_result_path = os.path.expanduser(
+        f"~/workspace/XRL/ocean_subnet/{experiment}/{file_name}"
+    )
+with open(eval_result_path, "rb") as f:
     eval_results = pickle.load(f)
 
 full_scores = eval_results["full_scores"]

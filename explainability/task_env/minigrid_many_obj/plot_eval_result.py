@@ -2,15 +2,22 @@
 # subtasks = COLOR_NAMES
 
 subtasks = ["red", "blue", "purple", "grey"]
-save_fig = False
+save_fig = True
 
 
 # ---------------------------
 # Load evaluation result
 # ---------------------------
+import os
 import pickle
 
-with open("evaluation_results.pkl", "rb") as f:
+experiment = "reefshield_random_medium"
+file_name = "minigrid_evaluation_results.pkl"
+
+eval_result_path = os.path.expanduser(
+        f"~/workspace/XRL/ocean_subnet/{experiment}/{file_name}"
+    )
+with open(eval_result_path, "rb") as f:
     eval_results = pickle.load(f)
 
 full_scores = eval_results["full_scores"]
