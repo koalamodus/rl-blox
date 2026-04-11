@@ -172,7 +172,7 @@ for i, W in enumerate(layers_vis):
     # --- Add annotation for Hidden Layer 0 ---
     if i == 0:
         x_axes = 1.02
-        y_axes = 1 - (num_current_context+num_task_context/2 + 0.5) / h
+        y_axes = 1 - (num_current_context + num_task_context/2) / h
 
         overlap = 0.003
 
