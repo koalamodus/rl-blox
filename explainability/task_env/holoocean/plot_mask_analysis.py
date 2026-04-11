@@ -218,18 +218,20 @@ for i, W in enumerate(layers_vis):
     ax.set_xlim(-0.5, w - 0.5)
     ax.set_ylim(h - 0.5, -0.5)
 
-    ax.tick_params(axis='both', labelsize=font_size)
+    # ax.tick_params(axis='both', labelsize=font_size)
+    ax.set_xticks([])
+    ax.set_yticks([])
 
     
-    # ---------------------------
-    # last layer xtick and action annotation
-    # ---------------------------
-    if i == len(layers_vis) - 1:
-        # set xtick
-        w = W.shape[1]
+    # # ---------------------------
+    # # last layer xtick and action annotation
+    # # ---------------------------
+    # if i == len(layers_vis) - 1:
+    #     # set xtick
+    #     w = W.shape[1]
 
-        ax.set_xticks([0, w - 1])
-        ax.set_xticklabels([0, w - 1])
+    #     ax.set_xticks([0, w - 1])
+    #     ax.set_xticklabels([0, w - 1])
 
     #     # action annotation
     #     x_middle = 0.5
