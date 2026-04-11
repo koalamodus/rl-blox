@@ -176,10 +176,10 @@ for i in range(num_layers):
 font_size = 26
 scale = 0.1
 w_space = 0.25
-label_pad = 3
+label_pad = 5
 margin_width_ratio = 0.0
 annotation_line_width = 2.0
-legend_pos = [0.24, 0.5]
+legend_pos = [0.25, 0.55]
 
 width_ratios = [W.shape[1] for W in layers_vis]
 fig_width = (sum(width_ratios) + margin_width_ratio) * scale
@@ -192,8 +192,8 @@ axes_list = []
 label_str = "neuron index"
 xy_labels = [
     f"(state)\ninput layer {label_str}",
-    f"hidden layer 0 {label_str}",
-    f"hidden layer 1 {label_str}",
+    f"first hidden layer {label_str}",
+    f"second hidden layer {label_str}",
     f"output layer {label_str}\n(action)"
 ]
 for i, W in enumerate(layers_vis):
@@ -222,6 +222,80 @@ for i, W in enumerate(layers_vis):
     ax.set_xticks([])
     ax.set_yticks([])
 
+    # --- Add annotation for Hidden Layer 0 ---
+    if i == 0:
+        x_axes = 1.02
+        y_axes = 1 - (num_current_context + num_task_context/2) / h
+
+        overlap = 0.003
+
+        turning_point_0 = [x_axes + 0.03, y_axes]
+        turning_point_1 = [x + y for x, y in zip(turning_point_0, [0, 0.25])]
+        turning_point_2 = [x + y for x, y in zip(turning_point_1, [-0.15, 0])]
+        text_pos = [x + y for x, y in zip(turning_point_2, [-0.5, 0])]
+
+        ax.annotate(
+            "",
+            xy=(x_axes, y_axes),
+            xycoords=ax.transAxes,
+            xytext=(turning_point_0[0], turning_point_0[1]),
+            textcoords=ax.transAxes,
+            arrowprops=dict(
+                arrowstyle="-[,widthB=0.3,lengthB=0.3",
+                color="black",
+                linewidth=annotation_line_width,
+            ),
+            fontsize=font_size,
+            color='black',
+            va='center',
+            clip_on=False
+        )
+
+        ax.annotate(
+            "",
+            xy=(turning_point_0[0] - overlap, turning_point_0[1] - overlap),                  # arrow head (end)
+            xycoords=ax.transAxes,
+            xytext=(turning_point_1[0] - overlap, turning_point_1[1] + overlap),        # arrow tail (start) 0.1 above
+            textcoords=ax.transAxes,
+            arrowprops=dict(
+                arrowstyle="-",  # bracket-style line
+                color="black",
+                linewidth=annotation_line_width,
+            ),
+            fontsize=font_size,
+            color='black',
+            va='center',
+            clip_on=False
+        )
+
+        ax.annotate(
+            "",
+            xy=(turning_point_1[0], turning_point_1[1]),                  # arrow head (end)
+            xycoords=ax.transAxes,
+            xytext=(turning_point_2[0], turning_point_2[1]),        # arrow tail (start) 0.1 above
+            textcoords=ax.transAxes,
+            arrowprops=dict(
+                arrowstyle="<-",  # bracket-style line
+                color="black",
+                linewidth=annotation_line_width,
+            ),
+            fontsize=font_size,
+            color='black',
+            va='center',
+            clip_on=False
+        )
+
+        ax.annotate(
+            "task context variables",
+            xy=(text_pos[0], text_pos[1]),                  # arrow head (end)
+            xycoords=ax.transAxes,
+            xytext=(text_pos[0], text_pos[1]),        # arrow tail (start) 0.1 above
+            textcoords=ax.transAxes,
+            fontsize=font_size,
+            color='black',
+            va='center',
+            clip_on=False
+        )
     
     # # ---------------------------
     # # last layer xtick and action annotation
