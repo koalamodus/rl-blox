@@ -176,15 +176,25 @@ gs = fig.add_gridspec(1, len(layers_vis), width_ratios=width_ratios, wspace=w_sp
 
 axes_list = []
 
+xy_labels = ["input layer index (state)", "hidden layer 0 index", "hidden layer 1 index", "output layer index (action)"]
 for i, W in enumerate(layers_vis):
 
     ax = fig.add_subplot(gs[0, i])
     ax.imshow(W, aspect='equal')
     axes_list.append(ax)
 
-    if i == 0:
-        ax.set_xlabel("output neuron index", fontsize=font_size, labelpad=label_pad)
-        ax.set_ylabel("input neuron index", fontsize=font_size, labelpad=label_pad)
+    ax.set_ylabel(
+        xy_labels[i],
+        fontsize=font_size,
+        labelpad=label_pad
+    )
+
+    if i != len(layers_vis) - 1:
+        ax.set_xlabel(
+            xy_labels[i+1],
+            fontsize=font_size,
+            labelpad=label_pad
+        )
 
     h, w = W.shape[:2]
     ax.set_xlim(-0.5, w - 0.5)
