@@ -162,6 +162,76 @@ def plot_heatmaps(
     
     plt.show()
 
+def plot_absolute_avg_return_heatmap(
+    full_scores,
+    subnet_scores,
+    subtasks,
+    figsize=(10, 6),
+    cmap="viridis",
+    annot=True,
+    save_fig=False,
+):
+    import pandas as pd
+    import seaborn as sns
+    import matplotlib.pyplot as plt
+    import os
+
+    metric = "Avg Return"
+
+    # Task labels
+    tasks = list(full_scores.keys())
+    task_labels = [t.split("Task ")[-1] for t in tasks]
+
+    # Build absolute performance DataFrame
+    abs_df = pd.DataFrame(index=task_labels)
+
+    # Full network column
+    abs_df["full\nnetwork"] = [
+        full_scores[t][metric] for t in tasks
+    ]
+
+    # Subnet columns
+    for subtask in subtasks:
+        abs_df[f"subnetwork\n{subtask}"] = [
+            subnet_scores[subtask][t][metric] for t in tasks
+        ]
+
+    # Plot heatmap
+    plt.figure(figsize=figsize)
+
+    ax = sns.heatmap(
+        abs_df,
+        cmap=cmap,
+        annot=annot,
+        fmt=".2f",
+        linewidths=0.2,
+        linecolor="white",
+        cbar=True,
+        vmin=0,
+        vmax=1,
+        annot_kws={"size": 12},
+    )
+
+    ax.set_title(f"{experiment} normalized average return", fontsize=12)
+    # ax.set_xlabel("Networks", fontsize=12)
+    ax.set_ylabel("Tasks", fontsize=12)
+    ax.tick_params(axis="both", labelsize=12)
+
+    # Colorbar styling
+    cbar = ax.collections[0].colorbar
+    cbar.ax.tick_params(labelsize=12)
+
+    plt.tight_layout()
+
+    # Optional save
+    if save_fig:
+        path = os.path.expanduser(
+            f"~/Pictures/{experiment}_avg_return_heatmap.pdf"
+        )
+        plt.savefig(path)
+
+    plt.show()
+
 def normalize_metric_dict(data, metric, vmin, vmax):
     """
     Works for:
@@ -288,4 +358,10 @@ plot_heatmaps(
     relative_performance=relative_performance,
     subtasks=subtasks,
     metric=metric_to_plot,
+)
+
+plot_absolute_avg_return_heatmap(
+    full_scores=full_scores,
+    subnet_scores=subnet_scores,
+    subtasks=subtasks,
 )
