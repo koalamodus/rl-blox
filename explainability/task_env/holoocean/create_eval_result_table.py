@@ -84,8 +84,6 @@ def highlight_cell_frames(ax, df, color="grey", linewidth=2):
                 )
                 ax.add_patch(rect)
 
-import matplotlib.patches as patches
-
 def highlight_cell_overlay(ax, df, color=(0.2, 0.2, 0.2), alpha=0.25):
 
     def get_group(label):
@@ -102,6 +100,45 @@ def highlight_cell_overlay(ax, df, color=(0.2, 0.2, 0.2), alpha=0.25):
                     edgecolor=None,
                     alpha=alpha
                 )
+                ax.add_patch(rect)
+
+def highlight_cell_pattern(ax, df, hatch="//", edgecolor=(0,0,0)):
+
+    def get_group(label):
+        return label.split("\n")[-1]
+
+    for i, task in enumerate(df.index):
+        for j, subnet in enumerate(df.columns):
+
+            if get_group(task) == get_group(subnet):
+
+                rect = patches.Rectangle(
+                    (j, i), 1, 1,
+                    facecolor="none",   # keep heatmap visible
+                    edgecolor=edgecolor,
+                    hatch=hatch,
+                    linewidth=0
+                )
+                ax.add_patch(rect)
+
+def add_inner_borders(ax, df, inset=0.0, color="grey", linewidth=3):
+    def get_group(label):
+        return label.split("\n")[-1]
+
+    for i, task in enumerate(df.index):
+        for j, subnet in enumerate(df.columns):
+
+            if get_group(task) == get_group(subnet):
+
+                rect = patches.Rectangle(
+                    (j + inset, i + inset),     # shift inward
+                    1 - 2*inset,                # shrink width
+                    1 - 2*inset,                # shrink height
+                    fill=False,
+                    edgecolor=color,
+                    linewidth=linewidth
+                )
+
                 ax.add_patch(rect)
 
 def plot_heatmaps(
@@ -256,7 +293,9 @@ def plot_absolute_avg_return_heatmap(
     )
 
     # highlight_cell_frames(ax, abs_df)
-    highlight_cell_overlay(ax, abs_df)
+    # highlight_cell_overlay(ax, abs_df)
+    # highlight_cell_pattern(ax, abs_df, hatch="///")
+    add_inner_borders(ax, abs_df, inset=0.02)
 
     ax.set_title(f"{experiment} normalized average return", fontsize=font_size, pad=title_pad)
     # ax.set_xlabel("Networks", fontsize=font_size)
