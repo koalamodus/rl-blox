@@ -63,6 +63,84 @@ def build_performance_tables(
 
     return abs_df, rel_df
 
+import matplotlib.patches as patches
+
+def highlight_cell_frames(ax, df, color="grey", linewidth=2):
+
+    def get_color(label):
+        return label.split("\n")[-1]
+
+    for i, task in enumerate(df.index):
+        for j, subnet in enumerate(df.columns):
+
+            if get_color(task) == get_color(subnet):
+
+                rect = patches.Rectangle(
+                    (j, i), 1, 1,
+                    fill=False,
+                    edgecolor=color,
+                    linewidth=linewidth,
+                    linestyle="-",
+                )
+                ax.add_patch(rect)
+
+def highlight_cell_overlay(ax, df, color=(0.2, 0.2, 0.2), alpha=0.25):
+
+    def get_group(label):
+        return label.split("\n")[-1]
+
+    for i, task in enumerate(df.index):
+        for j, subnet in enumerate(df.columns):
+
+            if get_group(task) == get_group(subnet):
+
+                rect = patches.Rectangle(
+                    (j, i), 1, 1,
+                    facecolor=color,
+                    edgecolor=None,
+                    alpha=alpha
+                )
+                ax.add_patch(rect)
+
+def highlight_cell_pattern(ax, df, hatch="//", edgecolor=(0,0,0)):
+
+    def get_group(label):
+        return label.split("\n")[-1]
+
+    for i, task in enumerate(df.index):
+        for j, subnet in enumerate(df.columns):
+
+            if get_group(task) == get_group(subnet):
+
+                rect = patches.Rectangle(
+                    (j, i), 1, 1,
+                    facecolor="none",   # keep heatmap visible
+                    edgecolor=edgecolor,
+                    hatch=hatch,
+                    linewidth=0
+                )
+                ax.add_patch(rect)
+
+def add_inner_borders(ax, df, inset=0.0, color="grey", linewidth=3):
+    def get_group(label):
+        return label.split("\n")[-1]
+
+    for i, task in enumerate(df.index):
+        for j, subnet in enumerate(df.columns):
+
+            if get_group(task) == get_group(subnet):
+
+                rect = patches.Rectangle(
+                    (j + inset, i + inset),     # shift inward
+                    1 - 2*inset,                # shrink width
+                    1 - 2*inset,                # shrink height
+                    fill=False,
+                    edgecolor=color,
+                    linewidth=linewidth
+                )
+
+                ax.add_patch(rect)
+
 def plot_heatmaps(
     full_scores,
     subnet_scores,
@@ -162,6 +240,83 @@ def plot_heatmaps(
     
     plt.show()
 
+def plot_absolute_avg_return_heatmap(
+    full_scores,
+    subnet_scores,
+    subtasks,
+    figsize=(12, 6),
+    cmap="viridis",
+    annot=True,
+    save_fig=True,
+):
+    metric = "Avg Return"
+    font_size = 20
+    title_pad = 20
+
+    # Task labels
+    tasks = list(full_scores.keys())
+    task_labels = ["task\n" + t.split("Task ")[-1] for t in tasks]
+
+    # Build absolute performance DataFrame
+    abs_df = pd.DataFrame(index=task_labels)
+
+    # Full network column
+    abs_df["full\nnetwork"] = [
+        full_scores[t][metric] for t in tasks
+    ]
+
+    # Subnet columns
+    for subtask in subtasks:
+        abs_df[f"subnetwork\n{subtask}"] = [
+            subnet_scores[subtask][t][metric] for t in tasks
+        ]
+
+    # Plot heatmap
+    plt.figure(figsize=figsize)
+
+    # n_rows, n_cols = abs_df.shape
+    # cell_size = 0.5
+    # plt.figure(figsize=(n_cols * cell_size, n_rows * cell_size))
+
+    ax = sns.heatmap(
+        abs_df,
+        cmap=cmap,
+        annot=annot,
+        fmt=".2f",
+        linewidths=0.2,
+        linecolor="white",
+        cbar=True,
+        vmin=0,
+        vmax=1,
+        cbar_kws={"pad": 0.02},
+        annot_kws={"size": font_size},
+    )
+
+    # highlight_cell_frames(ax, abs_df)
+    # highlight_cell_overlay(ax, abs_df)
+    # highlight_cell_pattern(ax, abs_df, hatch="///")
+    add_inner_borders(ax, abs_df, inset=0.02)
+
+    ax.set_title(f"{experiment} normalized average return", fontsize=font_size, pad=title_pad)
+    # ax.set_xlabel("Networks", fontsize=font_size)
+    # ax.set_ylabel("Tasks", fontsize=font_size)
+    ax.tick_params(axis="both", which="both", length=0, labelsize=font_size)
+
+    # Colorbar styling
+    cbar = ax.collections[0].colorbar
+    cbar.ax.tick_params(labelsize=font_size)
+
+    plt.tight_layout()
+
+    # Optional save
+    if save_fig:
+        path = os.path.expanduser(
+            f"~/Pictures/{experiment}_avg_return_heatmap.pdf"
+        )
+        plt.savefig(path)
+
+    plt.show()
+
 def normalize_metric_dict(data, metric, vmin, vmax):
     """
     Works for:
@@ -256,26 +411,26 @@ subnet_scores = {
     s: normalize_metric_dict(subnet_scores[s], metric, vmin, vmax)
     for s in subtasks
 }
-# Recompute relative avg return
 
-relative_performance = compute_relative_performance(subtasks, subnet_scores, full_scores)
+# # Recompute relative avg return
+# relative_performance = compute_relative_performance(subtasks, subnet_scores, full_scores)
 
-abs_df, rel_df = build_performance_tables(
-    full_scores,
-    subnet_scores,
-    relative_performance,
-    subtasks,
-    metric=metric_to_plot,
-)
+# abs_df, rel_df = build_performance_tables(
+#     full_scores,
+#     subnet_scores,
+#     relative_performance,
+#     subtasks,
+#     metric=metric_to_plot,
+# )
 
-# ---------------------------
-# Display tables
-# ---------------------------
-print("\n=== Absolute Performance ===")
-print(abs_df.to_string(index=False))
+# # ---------------------------
+# # Display tables
+# # ---------------------------
+# print("\n=== Absolute Performance ===")
+# print(abs_df.to_string(index=False))
 
-print("\n=== Relative Performance ===")
-print(rel_df.to_string(index=False))
+# print("\n=== Relative Performance ===")
+# print(rel_df.to_string(index=False))
 
 # ---------------------------
 # Heatmaps
@@ -286,4 +441,10 @@ plot_heatmaps(
     relative_performance=relative_performance,
     subtasks=subtasks,
     metric=metric_to_plot,
+)
+
+plot_absolute_avg_return_heatmap(
+    full_scores=full_scores,
+    subnet_scores=subnet_scores,
+    subtasks=subtasks,
 )
