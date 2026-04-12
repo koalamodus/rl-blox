@@ -244,14 +244,14 @@ def plot_absolute_avg_return_heatmap(
     full_scores,
     subnet_scores,
     subtasks,
-    figsize=(12, 6),
+    figsize=(10, 6),
     cmap="viridis",
     annot=True,
     save_fig=True,
 ):
     metric = "Avg Return"
     font_size = 20
-    title_pad = 20
+    title_pad = 70
 
     # Task labels
     tasks = list(full_scores.keys())
@@ -272,7 +272,7 @@ def plot_absolute_avg_return_heatmap(
         ]
 
     # Plot heatmap
-    plt.figure(figsize=figsize)
+    fig, ax = plt.subplots(figsize=figsize)
 
     # n_rows, n_cols = abs_df.shape
     # cell_size = 0.5
@@ -285,10 +285,9 @@ def plot_absolute_avg_return_heatmap(
         fmt=".2f",
         linewidths=0.2,
         linecolor="white",
-        cbar=True,
+        cbar=False,
         vmin=0,
         vmax=1,
-        cbar_kws={"pad": 0.02},
         annot_kws={"size": font_size},
     )
 
@@ -303,7 +302,13 @@ def plot_absolute_avg_return_heatmap(
     ax.tick_params(axis="both", which="both", length=0, labelsize=font_size)
 
     # Colorbar styling
-    cbar = ax.collections[0].colorbar
+    cbar_ax = fig.add_axes([0.15, 0.85, 0.75, 0.04])  # [left, bottom, width, height]
+    cbar = fig.colorbar(
+        ax.collections[0],
+        cax=cbar_ax,
+        orientation="horizontal"
+    )
+    cbar.outline.set_visible(False)  # remove border
     cbar.ax.tick_params(labelsize=font_size)
 
     plt.tight_layout()
