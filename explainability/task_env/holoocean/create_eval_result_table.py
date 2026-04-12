@@ -166,21 +166,18 @@ def plot_absolute_avg_return_heatmap(
     full_scores,
     subnet_scores,
     subtasks,
-    figsize=(10, 6),
+    figsize=(12, 6),
     cmap="viridis",
     annot=True,
-    save_fig=False,
+    save_fig=True,
 ):
-    import pandas as pd
-    import seaborn as sns
-    import matplotlib.pyplot as plt
-    import os
-
     metric = "Avg Return"
+    font_size = 20
+    title_pad = 20
 
     # Task labels
     tasks = list(full_scores.keys())
-    task_labels = [t.split("Task ")[-1] for t in tasks]
+    task_labels = ["task\n" + t.split("Task ")[-1] for t in tasks]
 
     # Build absolute performance DataFrame
     abs_df = pd.DataFrame(index=task_labels)
@@ -199,6 +196,10 @@ def plot_absolute_avg_return_heatmap(
     # Plot heatmap
     plt.figure(figsize=figsize)
 
+    # n_rows, n_cols = abs_df.shape
+    # cell_size = 0.5
+    # plt.figure(figsize=(n_cols * cell_size, n_rows * cell_size))
+
     ax = sns.heatmap(
         abs_df,
         cmap=cmap,
@@ -209,17 +210,18 @@ def plot_absolute_avg_return_heatmap(
         cbar=True,
         vmin=0,
         vmax=1,
-        annot_kws={"size": 12},
+        cbar_kws={"pad": 0.02},
+        annot_kws={"size": font_size},
     )
 
-    ax.set_title(f"{experiment} normalized average return", fontsize=12)
-    # ax.set_xlabel("Networks", fontsize=12)
-    ax.set_ylabel("Tasks", fontsize=12)
-    ax.tick_params(axis="both", labelsize=12)
+    ax.set_title(f"{experiment} normalized average return", fontsize=font_size, pad=title_pad)
+    # ax.set_xlabel("Networks", fontsize=font_size)
+    # ax.set_ylabel("Tasks", fontsize=font_size)
+    ax.tick_params(axis="both", which="both", length=0, labelsize=font_size)
 
     # Colorbar styling
     cbar = ax.collections[0].colorbar
-    cbar.ax.tick_params(labelsize=12)
+    cbar.ax.tick_params(labelsize=font_size)
 
     plt.tight_layout()
 
