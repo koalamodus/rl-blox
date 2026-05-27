@@ -140,14 +140,77 @@ sum_reward = 0.0
 eval_env = make_ocean_env(task, randomize=randomize_env, render_mode="human")
 obs, _ = eval_env.reset()
 done = False
+all_activations = []
+
 while not done:
     action, activations = policy(obs)
-    print(f"activations: {activations}")
+
+    # store per timestep
+    all_activations.append(activations)
 
     obs, reward, terminated, truncated, info = eval_env.step(action)
     sum_reward += reward
-    if terminated or truncated:
-        print(f"{task} reward: {reward}")
-        print(f"{task} return: {sum_reward}")
-        eval_env.close()
-        done = True
+
+    done = terminated or truncated
+
+eval_env.close()
+
+timesteps = len(all_activations)
+print(f"{task} reward: {sum_reward}")
+print(f"Collected {len(all_activations)} timesteps of activations")
+
+# print(f"activations: {all_activations}")
+
+# ---------------------------
+# (4) Plot activations (timesteps × neuron activations per layer)
+# ---------------------------
+
+def get_layer_activation_matrix(all_activations, layer_idx=0, name="layer", verbose=True):
+    """
+    Extracts (timesteps, neurons) matrix for a given layer index.
+
+    all_activations: list of steps, each step["hidden"] shape (batch, layers, neurons)
+    layer_idx: which layer to extract (0 = first layer, 1 = second layer, etc.)
+    """
+    matrix = jnp.stack([
+        step["hidden"][0][layer_idx] for step in all_activations
+    ])
+    matrix = matrix[:, 0, :]  # (timesteps, neurons), for batch size 1
+
+    if verbose:
+        print(f"{name} activation matrix shape: {matrix.shape}")
+        print(matrix)
+
+    return matrix
+
+first_layer_matrix = get_layer_activation_matrix(all_activations, layer_idx=0, name="first layer")
+second_layer_matrix = get_layer_activation_matrix(all_activations, layer_idx=1, name="second layer")
+
+import matplotlib.pyplot as plt
+
+def plot_two_layer_matrices(first, second):
+    # ensure shared color scale
+    vmin = min(first.min(), second.min())
+    vmax = max(first.max(), second.max())
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5*timesteps/20), sharey=True)
+
+    im1 = axes[0].imshow(first, aspect='auto', cmap='viridis', vmin=vmin, vmax=vmax)
+    axes[0].set_title("First Layer")
+    axes[0].set_xlabel("Neurons")
+    axes[0].set_ylabel("Timesteps")
+    axes[0].set_yticks(jnp.arange(0, first.shape[0], 5))
+
+    im2 = axes[1].imshow(second, aspect='auto', cmap='viridis', vmin=vmin, vmax=vmax)
+    axes[1].set_title("Second Layer")
+    axes[1].set_xlabel("Neurons")
+    axes[1].set_yticks(jnp.arange(0, second.shape[0], 5))
+
+    # shared colorbar (attached to second subplot)
+    cbar = fig.colorbar(im2, ax=axes[1], fraction=0.046, pad=0.04)
+    cbar.set_label("Activation value")
+
+    plt.tight_layout()
+    plt.show()
+
+plot_two_layer_matrices(first_layer_matrix, second_layer_matrix)
