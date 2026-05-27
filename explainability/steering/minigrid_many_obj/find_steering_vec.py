@@ -128,52 +128,83 @@ state = sample_state(env, subtask, hparams_algorithm.get("batch_size"), key=subk
 # ---------------------------
 # (3) Collect task activations
 # ---------------------------
-task = "red"
-# task = "blue"
-# task = "purple"
-# task = "grey"
+def collect_task_activations(task, policy, make_ocean_env, randomize_env=False):
+    """
+    Runs one episode in the environment and collects activations.
 
-if task not in OBJ_COLORS:
-    raise RuntimeError(f"Unknown task: {task}")
+    Args:
+        task: environment task name
+        policy: function(obs) -> (action, activations)
+        make_ocean_env: env constructor
+        randomize_env: whether to randomize environment
 
-sum_reward = 0.0
-eval_env = make_ocean_env(task, randomize=randomize_env, render_mode="human")
-obs, _ = eval_env.reset()
-done = False
-all_activations = []
+    Returns:
+        sum_reward: total episode reward
+        all_activations: list of activations per timestep
+    """
+    sum_reward = 0.0
+    eval_env = make_ocean_env(task, randomize=randomize_env, render_mode="human")
 
-while not done:
-    action, activations = policy(obs)
+    obs, _ = eval_env.reset()
+    done = False
+    all_activations = []
 
-    # store per timestep
-    all_activations.append(activations)
+    while not done:
+        action, activations = policy(obs)
 
-    obs, reward, terminated, truncated, info = eval_env.step(action)
-    sum_reward += reward
+        all_activations.append(activations)
 
-    done = terminated or truncated
+        obs, reward, terminated, truncated, info = eval_env.step(action)
+        sum_reward += reward
 
-eval_env.close()
+        done = terminated or truncated
 
-timesteps = len(all_activations)
-print(f"{task} reward: {sum_reward}")
-print(f"Collected {len(all_activations)} timesteps of activations")
+    eval_env.close()
 
-# print(f"activations: {all_activations}")
+    print(f"{task} reward: {sum_reward}")
+    print(f"Collected {len(all_activations)} timesteps of activations")
+
+    return sum_reward, all_activations
+
+tasks = {"red", "grey"}
+
+results = {}
+
+for task in tasks:
+    if task not in OBJ_COLORS:
+        raise RuntimeError(f"Unknown task: {task}")
+
+    reward, all_acts = collect_task_activations(
+        task=task,
+        policy=policy,
+        make_ocean_env=make_ocean_env,
+        randomize_env=randomize_env
+    )
+
+    results[task] = {
+        "reward": reward,
+        "activations": all_acts
+    }
+
+print(results["red"]["reward"])
+print(results["grey"]["reward"])
+
+red_activations = results["red"]["activations"]
+grey_activations = results["grey"]["activations"]
 
 # ---------------------------
 # (4) Plot activations (timesteps × neuron activations per layer)
 # ---------------------------
 
-def get_layer_activation_matrix(all_activations, layer_idx=0, name="layer", verbose=True):
+def get_layer_activation_matrix(task_episode_activations, layer_idx=0, name="layer", verbose=False):
     """
     Extracts (timesteps, neurons) matrix for a given layer index.
 
-    all_activations: list of steps, each step["hidden"] shape (batch, layers, neurons)
+    task_episode_activations: list of steps, each step["hidden"] shape (batch, layers, neurons)
     layer_idx: which layer to extract (0 = first layer, 1 = second layer, etc.)
     """
     matrix = jnp.stack([
-        step["hidden"][0][layer_idx] for step in all_activations
+        step["hidden"][0][layer_idx] for step in task_episode_activations
     ])
     matrix = matrix[:, 0, :]  # (timesteps, neurons), for batch size 1
 
@@ -183,34 +214,54 @@ def get_layer_activation_matrix(all_activations, layer_idx=0, name="layer", verb
 
     return matrix
 
-first_layer_matrix = get_layer_activation_matrix(all_activations, layer_idx=0, name="first layer")
-second_layer_matrix = get_layer_activation_matrix(all_activations, layer_idx=1, name="second layer")
-
 import matplotlib.pyplot as plt
 
-def plot_two_layer_matrices(first, second):
-    # ensure shared color scale
+def plot_activation_layers(
+    task_episode_activations,
+    layer_idx=(0, 1),
+    layer_name=("First Layer", "Second Layer"),
+    title="Task Episode Activations"
+):
+    """
+    Extract and plot two activation layers side-by-side with shared color scale.
+    """
+
+    timesteps = len(task_episode_activations)
+
+    # extract both layers
+    matrices = [
+        get_layer_activation_matrix(task_episode_activations, idx, name)
+        for idx, name in zip(layer_idx, layer_name)
+    ]
+
+    first, second = matrices
+
+    # shared color scale
     vmin = min(first.min(), second.min())
     vmax = max(first.max(), second.max())
 
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5*timesteps/20), sharey=True)
+    fig, axes = plt.subplots(
+        1, 2,
+        figsize=(14, 5 * timesteps / 20),
+        sharey=True
+    )
 
-    im1 = axes[0].imshow(first, aspect='auto', cmap='viridis', vmin=vmin, vmax=vmax)
-    axes[0].set_title("First Layer")
-    axes[0].set_xlabel("Neurons")
+    for ax, mat, name in zip(axes, matrices, layer_name):
+        im = ax.imshow(mat, aspect='auto', cmap='viridis', vmin=vmin, vmax=vmax)
+        ax.set_title(name)
+        ax.set_xlabel("Neurons")
+        ax.set_yticks(jnp.arange(0, mat.shape[0], 5))
+
     axes[0].set_ylabel("Timesteps")
-    axes[0].set_yticks(jnp.arange(0, first.shape[0], 5))
 
-    im2 = axes[1].imshow(second, aspect='auto', cmap='viridis', vmin=vmin, vmax=vmax)
-    axes[1].set_title("Second Layer")
-    axes[1].set_xlabel("Neurons")
-    axes[1].set_yticks(jnp.arange(0, second.shape[0], 5))
+    fig.suptitle(title)
 
-    # shared colorbar (attached to second subplot)
-    cbar = fig.colorbar(im2, ax=axes[1], fraction=0.046, pad=0.04)
+    # single shared colorbar (attached to second subplot)
+    cbar = fig.colorbar(im, ax=axes[1], fraction=0.046, pad=0.04)
     cbar.set_label("Activation value")
 
     plt.tight_layout()
     plt.show()
 
-plot_two_layer_matrices(first_layer_matrix, second_layer_matrix)
+plot_activation_layers(red_activations, title="Red Episode Activations")
+plot_activation_layers(grey_activations, title="Grey Episode Activations")
