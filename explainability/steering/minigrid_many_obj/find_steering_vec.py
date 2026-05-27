@@ -62,11 +62,6 @@ print("Loaded model checkpoint.")
 def get_policy_from_q_net(q):
 
     def policy(obs):
-        # print(f"q_values: {q(obs)}")
-        # print(f"argmax: {jnp.argmax(q(obs))}")
-        # print(f"action: {int(jnp.argmax(q(obs)))}")
-        
-        # inference
         q_values, activations = q([obs])
         # print("q_values")
         # print(q_values)
@@ -131,17 +126,22 @@ state = sample_state(env, subtask, hparams_algorithm.get("batch_size"), key=subk
 
 
 # ---------------------------
-# (3) Run interactive demo
+# (3) Collect task activations
 # ---------------------------
-import random
+task = "red"
+# task = "blue"
+# task = "purple"
+# task = "grey"
 
-task = random.choice(OBJ_COLORS)
+if task not in OBJ_COLORS:
+    raise RuntimeError(f"Unknown task: {task}")
+
 sum_reward = 0.0
 eval_env = make_ocean_env(task, randomize=randomize_env, render_mode="human")
 obs, _ = eval_env.reset()
-while True:
+done = False
+while not done:
     action, activations = policy(obs)
-    # print(f"task: {task}")
     print(f"activations: {activations}")
 
     obs, reward, terminated, truncated, info = eval_env.step(action)
@@ -150,8 +150,4 @@ while True:
         print(f"{task} reward: {reward}")
         print(f"{task} return: {sum_reward}")
         eval_env.close()
-        task = random.choice(OBJ_COLORS)
-        # resample task if it is yellow or green
-        sum_reward = 0.0
-        eval_env = make_ocean_env(task, randomize=randomize_env, render_mode="human")
-        obs, _ = eval_env.reset()
+        done = True
