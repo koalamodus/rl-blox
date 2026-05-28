@@ -78,69 +78,18 @@ policy = get_policy_from_q_net(q)
 # ---------------------------
 # (2) Collect task activations
 # ---------------------------
-def collect_task_activations(task, policy, make_ocean_env, randomize_env=False):
-    """
-    Runs one episode in the environment and collects activations.
-
-    Args:
-        task: environment task name
-        policy: function(obs) -> (action, activations)
-        make_ocean_env: env constructor
-        randomize_env: whether to randomize environment
-
-    Returns:
-        sum_reward: total episode reward
-        all_activations: list of activations per timestep
-    """
-    sum_reward = 0.0
-    eval_env = make_ocean_env(task, randomize=randomize_env, render_mode="human")
-
-    obs, _ = eval_env.reset()
-    done = False
-    all_activations = []
-
-    while not done:
-        action, activations = policy(obs)
-
-        all_activations.append(activations)
-
-        obs, reward, terminated, truncated, info = eval_env.step(action)
-        sum_reward += reward
-
-        done = terminated or truncated
-
-    eval_env.close()
-
-    print(f"{task} reward: {sum_reward}")
-    print(f"Collected {len(all_activations)} timesteps of activations")
-
-    return sum_reward, all_activations
-
 tasks = {"red", "grey"}
 
-results = {}
+load_data = True
+if load_data:
+    import pickle
 
-for task in tasks:
-    if task not in OBJ_COLORS:
-        raise RuntimeError(f"Unknown task: {task}")
+    with open("data/minigrid_activations.pkl", "rb") as file:
+       red_activations = pickle.load(file)
+       grey_activations = pickle.load(file)
 
-    reward, all_acts = collect_task_activations(
-        task=task,
-        policy=policy,
-        make_ocean_env=make_ocean_env,
-        randomize_env=randomize_env
-    )
-
-    results[task] = {
-        "reward": reward,
-        "activations": all_acts
-    }
-
-print(results["red"]["reward"])
-print(results["grey"]["reward"])
-
-red_activations = results["red"]["activations"]
-grey_activations = results["grey"]["activations"]
+print(len(red_activations))
+print(len(grey_activations))
 
 # ---------------------------
 # (3) Plot activations (timesteps × neuron activations per layer)
@@ -190,6 +139,8 @@ def plot_activation_layers(
     vmin = min(first.min(), second.min())
     vmax = max(first.max(), second.max())
 
+    absmax = max(abs(vmax), abs(vmin))
+
     fig, axes = plt.subplots(
         1, 2,
         figsize=(14, 5 * timesteps / 20),
@@ -197,7 +148,7 @@ def plot_activation_layers(
     )
 
     for ax, mat, name in zip(axes, matrices, layer_name):
-        im = ax.imshow(mat, aspect='auto', cmap='viridis', vmin=vmin, vmax=vmax)
+        im = ax.imshow(mat, aspect='auto', cmap='bwr', vmin=-absmax, vmax=absmax)
         ax.set_title(name)
         ax.set_xlabel("Neurons")
         ax.set_yticks(jnp.arange(0, mat.shape[0], 5))
@@ -213,13 +164,120 @@ def plot_activation_layers(
     plt.tight_layout()
     plt.show()
 
-plot_activation_layers(red_activations, title="Red Episode Activations")
-plot_activation_layers(grey_activations, title="Grey Episode Activations")
+    return first, second
+
+red_first, red_second = plot_activation_layers(red_activations, title="Red Episode Activations")
+grey_first, grey_second = plot_activation_layers(grey_activations, title="Grey Episode Activations")
+
+
+
+# ---------------------------
+# (4) Get avg activations diff (neuron activations per layer)
+# ---------------------------
+# diff = red - grey
+
+
+# take first n timestamps
+n = 5
+diff_first = red_first[0:n] - grey_first[0:n]
+diff_second = red_second[0:n] - grey_second[0:n]
+
+avg_first_diff = jnp.mean(diff_first, axis=0)
+avg_second_diff = jnp.mean(diff_second, axis=0)
+
+print(avg_first_diff)
+print(avg_second_diff)
+
+def plot_diff_matrix(
+    first,
+    second,
+    timesteps,
+    layer_name=("First Layer", "Second Layer"),
+    title="Task Activation Difference"
+):
+    # shared color scale
+    vmin = min(first.min(), second.min())
+    vmax = max(first.max(), second.max())
+    absmax = max(abs(vmax), abs(vmin))
+
+    fig, axes = plt.subplots(
+        1, 2,
+        figsize=(14, 5 * timesteps / 20 + 1),
+        sharey=True
+    )
+
+    matrices = [first, second]
+
+    for ax, mat, name in zip(axes, matrices, layer_name):
+        im = ax.imshow(mat, aspect='auto', cmap='bwr', vmin=-absmax, vmax=absmax)
+        ax.set_title(name)
+        ax.set_xlabel("Neurons")
+        ax.set_yticks(jnp.arange(0, mat.shape[0], 1))
+
+    axes[0].set_ylabel("Timesteps")
+
+    fig.suptitle(title)
+
+    # single shared colorbar (attached to second subplot)
+    cbar = fig.colorbar(im, ax=axes[1], fraction=0.046, pad=0.04)
+    cbar.set_label("Activation value")
+
+    plt.tight_layout()
+    plt.show()
+
+plot_diff_matrix(diff_first, diff_second, n,
+    title="Activation Difference (red - grey)"
+)
+
+plot_diff_matrix(avg_first_diff[None, :], avg_second_diff[None, :], 1,
+    title="Average Activation Difference (red - grey)"
+)
+
+
+# ---------------------------
+# (5) Get top-k activations diff (in neuron activations per layer)
+# ---------------------------
+
+def topk_abs_values(x, k=7):
+    top_idx = jnp.argsort(-jnp.abs(x))[:k]
+    top_values = x[top_idx]
+    return top_idx, top_values
+
+top_idx_1, top_values_1 = topk_abs_values(avg_first_diff)
+top_idx_2, top_values_2 = topk_abs_values(avg_second_diff)
+
+print(list(zip(top_idx_1.tolist(), top_values_1.tolist())))
+print(list(zip(top_idx_2.tolist(), top_values_2.tolist())))
+
+# ---------------------------
+# (6) Get steering vector (in neuron activations per layer)
+# ---------------------------
+
+def get_steering_vec(top_idx, top_values, vec_length=32):
+    vec = jnp.zeros(vec_length)
+    vec = vec.at[top_idx].set(top_values)
+    return vec
+
+first_steering_vec = get_steering_vec(top_idx_1, top_values_1)
+second_steering_vec = get_steering_vec(top_idx_2, top_values_2)
+
+print(first_steering_vec)
+print(second_steering_vec)
 
 save_data = True
 if save_data:
     import pickle
 
-    with open("data/minigrid_activations.pkl", "wb") as file:
-        pickle.dump(red_activations, file)
-        pickle.dump(grey_activations, file)
+    with open("data/minigrid_steering_vec.pkl", "wb") as file:
+        pickle.dump(first_steering_vec, file)
+        pickle.dump(second_steering_vec, file)
+
+# ---------------------------
+# (7) Activation steering (per layer)
+# ---------------------------
+
+# diff = red - grey
+
+# red = diff + grey
+# -> add steering vector to grey env, see if agent go to red corner
+

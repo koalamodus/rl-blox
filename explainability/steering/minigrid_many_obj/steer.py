@@ -60,8 +60,8 @@ print("Loaded model checkpoint.")
 
 def get_policy_from_q_net(q):
 
-    def policy(obs):
-        q_values, activations = q([obs])
+    def policy(obs, steer_vecs):
+        q_values, activations = q([obs], steer_vecs)
         # print("q_values")
         # print(q_values)
         # print("activations")
@@ -76,9 +76,31 @@ def get_policy_from_q_net(q):
 policy = get_policy_from_q_net(q)
 
 # ---------------------------
-# (2) Collect task activations
+# (2) Load steering vector
 # ---------------------------
-def collect_task_activations(task, policy, make_ocean_env, randomize_env=False):
+tasks = {"red", "grey"}
+
+load_data = True
+if load_data:
+    import pickle
+
+    with open("data/minigrid_steering_vec.pkl", "rb") as file:
+       first_steering_vec = pickle.load(file)
+       second_steering_vec = pickle.load(file)
+
+print(first_steering_vec)
+print(second_steering_vec)
+
+# ---------------------------
+# (3) Activation steering (per layer)
+# ---------------------------
+# diff = red - grey
+
+# red = diff + grey
+# -> add steering vector to grey env, see if agent go to red corner
+steer_vecs = jnp.stack([first_steering_vec, second_steering_vec])
+
+def task_activations_steering(task, policy, steer_vecs, make_ocean_env, randomize_env=False):
     """
     Runs one episode in the environment and collects activations.
 
@@ -100,7 +122,7 @@ def collect_task_activations(task, policy, make_ocean_env, randomize_env=False):
     all_activations = []
 
     while not done:
-        action, activations = policy(obs)
+        action, activations = policy(obs, steer_vecs)
 
         all_activations.append(activations)
 
@@ -116,7 +138,7 @@ def collect_task_activations(task, policy, make_ocean_env, randomize_env=False):
 
     return sum_reward, all_activations
 
-tasks = {"red", "grey"}
+tasks = {"grey"}
 
 results = {}
 
@@ -124,9 +146,10 @@ for task in tasks:
     if task not in OBJ_COLORS:
         raise RuntimeError(f"Unknown task: {task}")
 
-    reward, all_acts = collect_task_activations(
+    reward, all_acts = task_activations_steering(
         task=task,
         policy=policy,
+        steer_vecs=steer_vecs,
         make_ocean_env=make_ocean_env,
         randomize_env=randomize_env
     )
@@ -137,89 +160,3 @@ for task in tasks:
     }
 
 print(results["red"]["reward"])
-print(results["grey"]["reward"])
-
-red_activations = results["red"]["activations"]
-grey_activations = results["grey"]["activations"]
-
-# ---------------------------
-# (3) Plot activations (timesteps × neuron activations per layer)
-# ---------------------------
-
-def get_layer_activation_matrix(task_episode_activations, layer_idx=0, name="layer", verbose=False):
-    """
-    Extracts (timesteps, neurons) matrix for a given layer index.
-
-    task_episode_activations: list of steps, each step["hidden"] shape (batch, layers, neurons)
-    layer_idx: which layer to extract (0 = first layer, 1 = second layer, etc.)
-    """
-    matrix = jnp.stack([
-        step["hidden"][0][layer_idx] for step in task_episode_activations
-    ])
-    matrix = matrix[:, 0, :]  # (timesteps, neurons), for batch size 1
-
-    if verbose:
-        print(f"{name} activation matrix shape: {matrix.shape}")
-        print(matrix)
-
-    return matrix
-
-import matplotlib.pyplot as plt
-
-def plot_activation_layers(
-    task_episode_activations,
-    layer_idx=(0, 1),
-    layer_name=("First Layer", "Second Layer"),
-    title="Task Episode Activations"
-):
-    """
-    Extract and plot two activation layers side-by-side with shared color scale.
-    """
-
-    timesteps = len(task_episode_activations)
-
-    # extract both layers
-    matrices = [
-        get_layer_activation_matrix(task_episode_activations, idx, name)
-        for idx, name in zip(layer_idx, layer_name)
-    ]
-
-    first, second = matrices
-
-    # shared color scale
-    vmin = min(first.min(), second.min())
-    vmax = max(first.max(), second.max())
-
-    fig, axes = plt.subplots(
-        1, 2,
-        figsize=(14, 5 * timesteps / 20),
-        sharey=True
-    )
-
-    for ax, mat, name in zip(axes, matrices, layer_name):
-        im = ax.imshow(mat, aspect='auto', cmap='viridis', vmin=vmin, vmax=vmax)
-        ax.set_title(name)
-        ax.set_xlabel("Neurons")
-        ax.set_yticks(jnp.arange(0, mat.shape[0], 5))
-
-    axes[0].set_ylabel("Timesteps")
-
-    fig.suptitle(title)
-
-    # single shared colorbar (attached to second subplot)
-    cbar = fig.colorbar(im, ax=axes[1], fraction=0.046, pad=0.04)
-    cbar.set_label("Activation value")
-
-    plt.tight_layout()
-    plt.show()
-
-plot_activation_layers(red_activations, title="Red Episode Activations")
-plot_activation_layers(grey_activations, title="Grey Episode Activations")
-
-save_data = True
-if save_data:
-    import pickle
-
-    with open("data/minigrid_activations.pkl", "wb") as file:
-        pickle.dump(red_activations, file)
-        pickle.dump(grey_activations, file)
